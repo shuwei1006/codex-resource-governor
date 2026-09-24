@@ -25,6 +25,7 @@ export class Governor extends EventEmitter {
   private items = new Map<string, unknown>();
   private queue: Promise<unknown> = Promise.resolve();
   private timer?: NodeJS.Timeout;
+  private controlTimer?: NodeJS.Timeout;
   private connectedThreads = new Set<string>();
   private closing = false;
   private disposePromise?: Promise<void>;
@@ -48,6 +49,10 @@ export class Governor extends EventEmitter {
     await this.refresh();
     this.timer = setInterval(() => {void this.refresh().catch(e => this.emit('notice', errorMessage(e)));}, 30_000);
     this.timer.unref();
+    // A separate terminal records its request in the shared state. The process
+    // that owns the App Server writer slot performs the actual interruption.
+    this.controlTimer = setInterval(() => {void this.processInterruptRequests().catch(e => this.emit('notice', errorMessage(e)));}, 500);
+    this.controlTimer.unref();
   }
   async refresh(): Promise<void> {return this.serial(() => this.refreshInternal());}
   private async refreshInternal(): Promise<void> {
@@ -118,7 +123,7 @@ export class Governor extends EventEmitter {
         if (!task) throw new Error(`Managed task was deleted: ${taskId}`);
         if (task.mode === 'off') throw new Error('Governance is off. Continue in a native Codex client, or explicitly choose auto/manual mode.');
         if (task.ownerPid && isAlive(task.ownerPid) && ['starting', 'running'].includes(task.status)) throw new Error('This task already has an active turn.');
-        task.status = 'starting'; task.ownerPid = process.pid; task.error = null;
+        task.status = 'starting'; task.ownerPid = process.pid; task.interruptRequestedAt = null; task.error = null;
         task.turnId = null;
       })).tasks;
       let task = this.task(taskId);
@@ -169,7 +174,16 @@ export class Governor extends EventEmitter {
       this.tasks = state.tasks;
       const task = state.tasks.find(candidate => candidate.id === taskId);
       if (!task) throw new Error(`Managed task was deleted: ${taskId}`);
-      if (!task.turnId || !['starting', 'running', 'unknown'].includes(task.status)) throw new Error('This task has no interruptible turn.');
+      if (!['starting', 'running', 'unknown'].includes(task.status)) throw new Error('This task has no interruptible turn.');
+      if (task.ownerPid && task.ownerPid !== process.pid && isAlive(task.ownerPid)) {
+        this.tasks = (await this.store.update(savedState => {
+          const saved = savedState.tasks.find(candidate => candidate.id === taskId);
+          if (saved && saved.turnId === task.turnId && saved.ownerPid === task.ownerPid && ['starting', 'running', 'unknown'].includes(saved.status)) saved.interruptRequestedAt = new Date().toISOString();
+        })).tasks;
+        this.emit('change');
+        return;
+      }
+      if (!task.turnId) throw new Error('This task has no interruptible turn yet.');
       if (!this.connectedThreads.has(task.threadId)) {
         await this.rpc.request('thread/resume', {threadId: task.threadId, cwd: task.cwd, sandbox: 'workspace-write', approvalPolicy: 'on-request'});
         this.connectedThreads.add(task.threadId);
@@ -179,11 +193,40 @@ export class Governor extends EventEmitter {
       this.tasks = (await this.store.update(savedState => {
         const saved = savedState.tasks.find(candidate => candidate.id === taskId);
         if (saved && saved.turnId === turnId && ['starting', 'running', 'unknown'].includes(saved.status)) {
-          saved.status = 'interrupted'; saved.ownerPid = null; saved.error = null;
+          saved.status = 'interrupted'; saved.ownerPid = null; saved.interruptRequestedAt = null; saved.error = null;
         }
       })).tasks;
       this.requests = this.requests.filter(request => !requestForThread(request, task.threadId));
       this.emit('change');
+    });
+  }
+  private async processInterruptRequests(): Promise<void> {
+    if (this.closing) return;
+    return this.serial(async () => {
+      const pending = (await this.store.state()).tasks.filter(task => task.ownerPid === process.pid && task.interruptRequestedAt && task.turnId && ['starting', 'running', 'unknown'].includes(task.status));
+      for (const task of pending) {
+        await this.store.update(state => {
+          const saved = state.tasks.find(candidate => candidate.id === task.id);
+          if (saved?.turnId === task.turnId) saved.interruptRequestedAt = null;
+        });
+        try {
+          await this.rpc.request('turn/interrupt', {threadId: task.threadId, turnId: task.turnId});
+          this.tasks = (await this.store.update(state => {
+            const saved = state.tasks.find(candidate => candidate.id === task.id);
+            if (saved?.ownerPid === process.pid && saved.turnId === task.turnId && ['starting', 'running', 'unknown'].includes(saved.status)) {
+              saved.status = 'interrupted'; saved.ownerPid = null; saved.interruptRequestedAt = null; saved.error = null;
+            }
+          })).tasks;
+          this.emit('change');
+          this.requests = this.requests.filter(request => !requestForThread(request, task.threadId));
+        } catch (error) {
+          await this.store.update(state => {
+            const saved = state.tasks.find(candidate => candidate.id === task.id);
+            if (saved?.turnId === task.turnId) saved.error = `Interrupt failed: ${errorMessage(error)}`;
+          });
+          this.emit('notice', `Interrupt request failed for ${task.id}: ${errorMessage(error)}`);
+        }
+      }
     });
   }
   async deleteTask(id: string): Promise<Task> {
@@ -191,6 +234,15 @@ export class Governor extends EventEmitter {
     const latest = (await this.store.state()).tasks.find(task => task.id === taskId);
     if (!latest) throw new Error(`Managed task was deleted: ${taskId}`);
     if (['starting', 'running', 'unknown'].includes(latest.status)) await this.interrupt(taskId);
+    // Wait outside the serial queue so the owning connection can process its
+    // request. Never delete a running record merely because a request was sent.
+    const deadline = Date.now() + 5000;
+    while (true) {
+      const saved = (await this.store.state()).tasks.find(task => task.id === taskId);
+      if (!saved || !['starting', 'running', 'unknown'].includes(saved.status)) break;
+      if (Date.now() >= deadline) throw new Error('Interruption is not confirmed; task record retained. Check the owning terminal and retry delete after completion.');
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
     return this.serial(async () => {
       let deleted: Task | undefined;
       this.tasks = (await this.store.update(state => {
@@ -279,7 +331,7 @@ export class Governor extends EventEmitter {
     return this.disposePromise;
   }
   private async disposeInternal(): Promise<void> {
-    this.closing = true; clearInterval(this.timer);
+    this.closing = true; clearInterval(this.timer); clearInterval(this.controlTimer);
     for (const request of [...this.requests]) {try {this.answerRequest(request, false);} catch { /* Disconnected. */ }}
     await this.queue;
     await Promise.allSettled(this.tasks.filter(t => t.ownerPid === process.pid && t.status === 'running' && t.turnId).map(t => this.rpc.request('turn/interrupt', {threadId: t.threadId, turnId: t.turnId})));

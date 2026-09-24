@@ -37,7 +37,8 @@ export const taskSchema = z.object({
   turnId: z.string().nullable().default(null),
   hasSubmitted: z.boolean().default(false),
   status: z.enum(['idle', 'starting', 'running', 'completed', 'failed', 'interrupted', 'unknown']).default('idle'),
-  ownerPid: z.number().nullable().default(null), output: z.string().default(''), error: z.string().nullable().default(null),
+  ownerPid: z.number().nullable().default(null), interruptRequestedAt: z.string().nullable().default(null),
+  output: z.string().default(''), error: z.string().nullable().default(null),
 });
 export const stateSchema = z.object({version: z.literal(2), tasks: z.array(taskSchema)});
 export type Config = z.infer<typeof configSchema>;

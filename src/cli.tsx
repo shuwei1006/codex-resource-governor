@@ -69,7 +69,7 @@ async function headlessTurn(governor: Governor, id: string, prompt: string): Pro
     });
   } finally {governor.off('change', rejectRequests);}
 }
-const program = new Command().name('codex-governor').description('Quota-aware model and reasoning governance for Codex tasks').version('0.2.0');
+const program = new Command().name('codex-governor').description('Quota-aware model and reasoning governance for Codex tasks').version('0.2.1');
 program.action(async () => {requireTTY(); await withGovernor(governor => tui(governor));});
 program.command('doctor').description('Check Codex environment and runtime capabilities').option('--live-turn', 'Also run one real read-only turn (uses account quota)').action(async options => {
   const results = await doctor(undefined, Boolean(options.liveTurn), check => process.stdout.write(`${check.ok ? 'PASS' : 'FAIL'} ${check.name}: ${check.detail}\n`));
@@ -142,7 +142,7 @@ program.command('run [prompt]').allowExcessArguments(false).description('Describ
 program.command('list').description('List Governor task IDs and their Codex thread IDs').option('--json', 'Print structured task summaries').action(async options => {
   const tasks = (await store.state()).tasks.map(({id, threadId, name, status, cwd, mode, manualSelection, current, currentMode}) => ({id, threadId, name, status, cwd, mode, manualSelection, current, currentMode}));
   if (options.json) process.stdout.write(`${JSON.stringify(tasks, null, 2)}\n`);
-  else for (const task of tasks) process.stdout.write(`${task.id}  ${task.status}  ${task.mode}  ${safeText(task.name)}\n  Codex: ${task.threadId}\n`);
+  else for (const task of tasks) process.stdout.write(`Governor: ${task.id}  ${task.status}  ${task.mode}  ${safeText(task.name)}\n  Codex: ${task.threadId}\n`);
 });
 program.command('open <id>').description('Open a completed task in Codex App and/or VS Code')
   .addOption(new Option('--target <target>').choices(['app', 'vscode', 'both']).default('both'))
@@ -185,7 +185,8 @@ program.command('interrupt <id>').description('Interrupt an active task by ID, i
   await withGovernor(async governor => {
     const task = governor.task(id);
     await governor.interrupt(task.id);
-    process.stdout.write(`Interrupted ${task.id}: ${safeText(task.name)}\n`);
+    const latest = governor.task(task.id);
+    process.stdout.write(`${latest.status === 'interrupted' ? 'Interrupted' : 'Interrupt requested from the owning terminal'} ${task.id}: ${safeText(task.name)}\n`);
   });
 });
 program.command('delete <id>').description('Delete a local task record; an active turn is interrupted first').action(async (id: string) => {

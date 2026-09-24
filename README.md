@@ -114,6 +114,8 @@ codex-governor delete <id>
 
 `list` shows both Governor task IDs and Codex thread IDs. Use the Governor task ID for `<id>`; unambiguous prefixes also work. You can run `interrupt` from another terminal. `delete` removes only Governor's local record, preserving the Codex conversation history. A running task must be successfully interrupted before its record can be deleted.
 
+Both terminals must use the same `CODEX_GOVERNOR_HOME`. Cross-terminal interruption first reports a queued request; the owning Governor or VS Code proxy sends the actual interrupt. Use `list` to confirm the status becomes `interrupted`. Deletion waits for confirmation and retains the record if it is not confirmed. After updating, restart the terminal task or reload VS Code so the owning process uses the updated code.
+
 ### What counts as a turn?
 
 A **turn** starts when one user message is submitted and ends when that response completes, fails, or is interrupted. Tool calls, shell commands, and file edits made while handling the message belong to that same turn. The model and reasoning effort stay fixed during execution; Governor evaluates the next selection before the next turn starts.
@@ -338,7 +340,7 @@ Open the Codex conversation for your Governor-created task in VS Code and send y
 
 This integration only manages tasks created by Governor. Conversations you create separately in Codex are not enrolled automatically. Codex still handles images, tool approvals, and security settings. Independent code reviews and other inference entry points are outside this integration's scope.
 
-**The model name shown in the interface may not update.** To check the model and reasoning effort actually submitted, look at the `[Governor]` lines in Codex output logs or Governor's “Current” field.
+**The model name shown in the interface may not update.** Use `codex-governor list --json` to inspect the task's `current` and `currentMode`. To verify integration, switch an Auto task to Manual, then send a message in the same VS Code conversation. After completion, `currentMode` should change from `auto` to `manual`. Changing the mode alone does not update this field; it records the mode used for the last submitted turn. Switch back to Auto and send another message to verify it again. The proxy also emits `[Governor]` diagnostics, but the extension may not display them.
 
 This is experimental. After a Codex extension update or a change to Governor's installation location, you may need to regenerate the integration files. To restore the original setup, remove `chatgpt.cliExecutable` from VS Code settings and reload the window.
 

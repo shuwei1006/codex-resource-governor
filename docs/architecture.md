@@ -24,7 +24,7 @@ Every connection sends `initialize` and then `initialized` before application RP
 
 Current is updated only when a start acknowledgement arrives. Quota, priority, policy, or mode changes affect Next. Model output streams in memory; its bounded tail is persisted at completion or session close. The Codex thread is the source of full conversation history. Unknown outcomes remain unknown rather than being represented as success.
 
-Cross-process interruption reads the latest atomic task record, resumes its Codex thread on the new App Server connection, and sends `turn/interrupt` with the persisted thread and turn IDs. Record deletion interrupts active or uncertain turns first and proceeds only after that request succeeds. Deletion removes Governor state only; late completion notifications are ignored when their record no longer exists.
+Cross-process interruption writes a request into the latest atomic task record. The process that owns the active App Server connection polls the request and sends `turn/interrupt`, because a second connection cannot resume or interrupt a thread held by the active writer. Record deletion interrupts active or uncertain turns first and proceeds only after that request succeeds. Deletion removes Governor state only; late completion notifications are ignored when their record no longer exists.
 
 Each quota window has its own monotonic stage and observed reset timestamp. Per-window bookkeeping prevents unrelated resets or temporarily missing data from restoring a previously reduced configuration. The effective percentage is the minimum of currently valid windows; retained holds can keep a task more constrained than the current percentage alone would suggest.
 

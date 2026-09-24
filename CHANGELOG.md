@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 — 2026-09-24
+
+- Route cross-terminal interruption through the owning Governor or IDE proxy connection instead of attempting to resume an actively written thread from a new App Server.
+- Distinguish queued interrupt requests from acknowledged interruptions, wait before deleting active records, and retain records when interruption is not confirmed.
+- Label Governor task IDs explicitly in CLI listings.
+- Clarify VS Code integration setup and verification; manual follow-up selection was confirmed in the local VS Code test.
+
 ## 0.2.0 — 2026-09-24
 
 - Distinguish Model Profile (Primary / Economy), Task Priority (High / Medium / Low), Quota Policy (Quality First / Balanced / Save Quota), and Reasoning Effort throughout English and Chinese setup, TUI, CLI help, explanations, and documentation.

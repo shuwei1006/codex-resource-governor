@@ -121,7 +121,7 @@ test('CLI exposes new names and rejects legacy arguments before starting Codex',
     assert.match(help, /--primary-effort/);
     assert.doesNotMatch(help, /--normal-/);
     assert.match((await run('run', '--help')).stdout, /default: "medium"/);
-    assert.equal((await run('--version')).stdout.trim(), '0.2.0');
+    assert.equal((await run('--version')).stdout.trim(), '0.2.1');
     for (const args of [
       ['config', '--normal-model', 'model-a'],
       ['config', '--normal-effort', 'high'],

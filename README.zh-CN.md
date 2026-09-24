@@ -121,6 +121,8 @@ codex-governor delete <任务ID>
 
 `list` 同时显示 Governor 任务 ID 和 Codex Thread ID；这里的 `<任务ID>` 使用前者，也支持无歧义的前缀。`interrupt` 可从另一个终端执行。`delete` 只删除 Governor 的本地记录，Codex 会话历史仍保留；运行中的任务会先尝试中断，中断成功后才删除。
 
+两个终端需使用同一个 `CODEX_GOVERNOR_HOME`。跨终端中断会先提示已请求中断，由运行任务的 Governor 或 VS Code 代理发送实际中断；再用 `list` 确认状态变为 `interrupted`。删除运行中的任务会等待中断确认，未确认时保留记录。更新程序后需重新启动运行任务的终端或重新加载 VS Code，已启动的进程不会自动更新。
+
 ### 什么算一轮任务
 
 一次用户输入提交后，到本轮完成、失败或被中断为止，算一个 **turn**。这一轮中的工具调用、终端命令和文件修改都属于同一个 turn。运行期间模型与思考强度保持不变，Governor 只在下一轮开始前重新判断。
@@ -345,7 +347,7 @@ command -v codex
 
 这个接入只管理 Governor 创建的任务。你在 Codex 中另外新建的会话不会自动受到管理，图片、工具审批和安全设置仍由 Codex 处理。独立的代码审查等其他推理入口也不在管理范围内。
 
-**界面的模型名称可能不会同步变化。**查看实际提交的模型与思考强度，请看 Codex 输出日志中的 `[Governor]` 行，或 Governor 的“当前”字段。
+**界面的模型名称可能不会同步变化。**可以通过 `codex-governor list --json` 查看任务的 `current` 和 `currentMode`。验证接入时，先切换到 Manual 模式，再在同一 VS Code 会话发送一条消息；回复完成后，`currentMode` 应从 `auto` 变成 `manual`。仅修改模式不会更新 `currentMode`，它记录的是最近实际提交时的模式。确认后切回 Auto 并再次发送消息验证。代理还会输出 `[Governor]` 诊断行，但扩展不一定展示这些日志。
 
 这是实验性功能，Codex 插件升级或 Governor 安装位置变化后，可能需要重新生成接入文件。想恢复原来的使用方式，删除 VS Code 设置中的 `chatgpt.cliExecutable`，再重新加载窗口即可。
 

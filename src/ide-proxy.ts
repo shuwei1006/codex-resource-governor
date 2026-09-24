@@ -14,7 +14,38 @@ const active = (task: Task) => ['starting', 'running'].includes(task.status) && 
 export class IdePolicyProxy {
   private queue: Promise<unknown> = Promise.resolve();
   private output = new Map<string, string>();
-  constructor(private readonly rpc: Rpc, private readonly store: Store, private readonly notice: (message: string) => void = () => {}) {}
+  private controlTimer: NodeJS.Timeout;
+  constructor(private readonly rpc: Rpc, private readonly store: Store, private readonly notice: (message: string) => void = () => {}) {
+    this.controlTimer = setInterval(() => {void this.processInterruptRequests().catch(error => this.notice(errorMessage(error)));}, 500);
+    this.controlTimer.unref();
+  }
+  private async processInterruptRequests(): Promise<void> {
+    return this.serial(async () => {
+      const tasks = (await this.store.state()).tasks.filter(task => task.ownerPid === process.pid && task.interruptRequestedAt && task.turnId && this.output.has(task.threadId) && ['starting', 'running', 'unknown'].includes(task.status));
+      for (const task of tasks) {
+        await this.store.update(state => {
+          const saved = state.tasks.find(candidate => candidate.id === task.id);
+          if (saved?.turnId === task.turnId) saved.interruptRequestedAt = null;
+        });
+        try {
+          await this.rpc.request('turn/interrupt', {threadId: task.threadId, turnId: task.turnId});
+          await this.store.update(state => {
+            const saved = state.tasks.find(candidate => candidate.id === task.id);
+            if (saved?.ownerPid === process.pid && saved.turnId === task.turnId && ['starting', 'running', 'unknown'].includes(saved.status)) {
+              saved.status = 'interrupted'; saved.ownerPid = null; saved.error = null;
+              saved.output = this.output.get(task.threadId) ?? saved.output;
+            }
+          });
+        } catch (error) {
+          await this.store.update(state => {
+            const saved = state.tasks.find(candidate => candidate.id === task.id);
+            if (saved?.turnId === task.turnId) saved.error = `Interrupt failed: ${errorMessage(error)}`;
+          });
+          this.notice(`Interrupt request failed for ${task.id}: ${errorMessage(error)}`);
+        }
+      }
+    });
+  }
   private serial<T>(work: () => Promise<T>): Promise<T> {
     const result = this.queue.then(work); this.queue = result.catch(() => {}); return result;
   }
@@ -48,7 +79,7 @@ export class IdePolicyProxy {
         if (!decision.next) throw new Error('No managed selection. Set manual mode with both --model and --effort.');
         validateSelection(decision.next, models);
         saved.holds = decision.holds;
-        saved.status = 'starting'; saved.ownerPid = process.pid; saved.error = null;
+        saved.status = 'starting'; saved.ownerPid = process.pid; saved.interruptRequestedAt = null; saved.error = null;
         saved.turnId = null; saved.hasSubmitted = true;
         task = structuredClone(saved);
       });
@@ -105,6 +136,7 @@ export class IdePolicyProxy {
     }).catch(error => this.notice(errorMessage(error)));
   }
   async close(): Promise<void> {
+    clearInterval(this.controlTimer);
     await this.queue;
     await this.store.update(state => {
       for (const task of state.tasks) if (task.ownerPid === process.pid && ['starting', 'running'].includes(task.status)) {
