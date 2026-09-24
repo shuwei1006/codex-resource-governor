@@ -46,7 +46,7 @@ Windows 建议使用 WSL2。
 
 ### 从 npm 安装
 
-可从 [npm](https://www.npmjs.com/package/codex-resource-governor) 安装。当前分支的命令尚待同步到 npm，使用本文中的命令请先按下方说明从源码安装。
+可从 [npm](https://www.npmjs.com/package/codex-resource-governor) 安装，安装后即可使用本文中的命令。
 
 ```sh
 npm install -g codex-resource-governor

@@ -4,7 +4,7 @@
   "description": "Local quota-aware task management and per-turn model selection for Codex",
   "type": "module",
   "license": "MIT",
-  "repository": {"type": "git", "url": "https://github.com/shuwei1006/codex-resource-governor.git"},
+  "repository": {"type": "git", "url": "git+https://github.com/shuwei1006/codex-resource-governor.git"},
   "homepage": "https://github.com/shuwei1006/codex-resource-governor#readme",
   "bugs": {"url": "https://github.com/shuwei1006/codex-resource-governor/issues"},
   "engines": { "node": ">=20" },

@@ -39,7 +39,7 @@ Governor targets macOS and Linux; use WSL2 on Windows. Allow memory for Codex it
 
 ### Install from npm
 
-Install the package from [npm](https://www.npmjs.com/package/codex-resource-governor). To use the commands documented on this branch, use the source installation below until the npm package is synchronized.
+Install the package from [npm](https://www.npmjs.com/package/codex-resource-governor) to use the commands in this README.
 
 ```sh
 npm install -g codex-resource-governor
