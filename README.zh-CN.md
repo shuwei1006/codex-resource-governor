@@ -299,17 +299,31 @@ App 和 VS Code 必须使用同一台机器、同一份 Codex 本地会话存储
 | VS Code 的 Codex 扩展 | 支持按线程打开 | 配置下面的实验性代理后支持受管理任务的 `turn/start` |
 | Codex 桌面 App | 支持按线程打开 | **不支持**；新消息使用 App 自身的模型设置 |
 
-### 在 VS Code 中保留自动选模
+### 在 VS Code 中继续让 Governor 自动选模
 
-这是实验性接入。先完成 Governor 的模型配置，再生成接入文件：
+如果你用 Governor 创建任务后，希望在 VS Code 的 Codex 插件里继续聊天，并让 Governor 为后续消息选择模型，需要完成下面的一次性设置。
+
+接入后，你仍然使用原来的 Codex 聊天界面。每次发送消息时，Governor 会按任务的控制模式处理选模：Auto 根据额度和优先级自动选择，Manual 使用固定配置，Off 交给 Codex 自己决定。
+
+#### 1. 生成接入文件
+
+先完成 Governor 的模型配置，再运行：
 
 ```sh
 codex-governor integration vscode --codex /absolute/path/to/codex
 ```
 
-将路径替换为实际 Codex 可执行文件路径；若 `codex` 已在 `PATH` 中，可用 `command -v codex` 查看。优先选择当前 VS Code 扩展自带的可执行文件，以减少版本差异。
+把 `/absolute/path/to/codex` 替换为实际的 Codex 可执行文件路径。如果终端已经能运行 `codex`，可以用下面的命令查看路径：
 
-命令只在 Governor 数据目录生成一个启动器，并打印类似以下的 JSON；**不会自动修改 VS Code 设置**：
+```sh
+command -v codex
+```
+
+建议优先使用当前 VS Code Codex 插件自带的可执行文件，减少版本不一致的问题。
+
+#### 2. 把生成的设置填入 VS Code
+
+命令会在 Governor 数据目录生成一个启动文件，并输出类似下面的设置：
 
 ```json
 {
@@ -317,15 +331,31 @@ codex-governor integration vscode --codex /absolute/path/to/codex
 }
 ```
 
-将命令实际输出的设置添加到 VS Code 的 **Preferences: Open User Settings (JSON)**，保留其他设置，然后执行 **Developer: Reload Window**。
+在 VS Code 命令面板中：
 
-配置完成后，在 VS Code 中继续 Governor 创建的任务，后续消息就会按该任务的控制模式选择模型与思考强度。其他原生会话不会自动纳入管理，输入、图片、审批和安全设置仍由原生客户端处理。
+1. 打开 **Preferences: Open User Settings (JSON)**。
+2. 将命令实际输出的 `chatgpt.cliExecutable` 设置加入文件，保留其他设置。
+3. 执行 **Developer: Reload Window**，重新加载窗口。
 
-原生模型选择器可能仍显示它自己的选择；实际提交的配置可在 Codex 输出日志的 `[Governor]` 行和 Governor 的“当前”字段中查看。独立 review 等其他推理入口不在此接入范围内。
+这一步需要手动完成，Governor 不会自动修改你的 VS Code 设置。
 
-此设置可能随扩展升级变化。升级或移动 Governor 安装位置后，应重新生成接入文件并检查是否正常。恢复默认设置时，删除 `chatgpt.cliExecutable` 并重新加载窗口。
+#### 3. 继续原来的任务
 
-源码安装需先运行 `npm run build`，再将上述命令的 `codex-governor` 替换为 `node dist/cli.js`。接口依据、启动器限制和验证范围见[原生接入说明](docs/native-integration.md)。
+在 VS Code 中打开 Governor 创建的任务对应的 Codex 会话，继续发送消息即可。任务处于 **Auto** 模式时，Governor 会在每轮消息开始前，根据额度和优先级选择模型与思考强度。
+
+这个接入只管理 Governor 创建的任务。你在 Codex 中另外新建的会话不会自动受到管理，图片、工具审批和安全设置仍由 Codex 处理。独立的代码审查等其他推理入口也不在管理范围内。
+
+**界面的模型名称可能不会同步变化。**查看实际提交的模型与思考强度，请看 Codex 输出日志中的 `[Governor]` 行，或 Governor 的“当前”字段。
+
+这是实验性功能，Codex 插件升级或 Governor 安装位置变化后，可能需要重新生成接入文件。想恢复原来的使用方式，删除 VS Code 设置中的 `chatgpt.cliExecutable`，再重新加载窗口即可。
+
+源码安装用户需先运行 `npm run build`，再将上述命令中的 `codex-governor` 换成 `node dist/cli.js`。更多限制和验证范围见[原生接入说明](docs/native-integration.md)。
+
+### Codex 桌面 App 可以这样接入吗？
+
+目前不支持。你可以在 App 中打开 Governor 创建的会话、查看历史并继续聊天，但后续消息使用 App 自己的模型设置，Governor 无法覆盖。
+
+如果希望后续消息持续由 Governor 自动选模，请在 Governor CLI/TUI 中继续任务，或使用上述 VS Code 实验性接入，并将任务设为 Auto 模式。
 
 ## 兼容性与 doctor
 

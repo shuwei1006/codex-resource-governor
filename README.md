@@ -292,17 +292,31 @@ The App and VS Code must run on the same machine and use the same local Codex co
 | VS Code Codex extension | Open by thread | Managed `turn/start` calls, after configuring the experimental proxy below |
 | Codex desktop App | Open by thread | **Not supported**; new messages use App settings |
 
-### Keep automatic selection in VS Code
+### Keep Governor selecting models in VS Code
 
-This integration is experimental. Complete Governor's model configuration first, then generate the integration files:
+If you create a task in Governor and want to continue chatting in the VS Code Codex extension while Governor selects models for later messages, complete this one-time setup.
+
+You keep using the same Codex chat interface. Each message follows the task's control mode: Auto selects based on quota and priority, Manual uses your fixed configuration, and Off leaves selection to Codex.
+
+#### 1. Generate the integration files
+
+Complete Governor's model configuration, then run:
 
 ```sh
 codex-governor integration vscode --codex /absolute/path/to/codex
 ```
 
-Replace the path with your actual Codex executable. If `codex` is on `PATH`, use `command -v codex` to find it. Prefer the executable bundled with your current VS Code extension to reduce version mismatches.
+Replace `/absolute/path/to/codex` with the actual Codex executable path. If your terminal can already run `codex`, find its path with:
 
-The command generates a launcher in Governor's data directory and prints JSON like this. **It does not edit VS Code settings automatically**:
+```sh
+command -v codex
+```
+
+Prefer the executable bundled with your current VS Code Codex extension to reduce version mismatches.
+
+#### 2. Add the generated setting to VS Code
+
+The command creates a launcher in Governor's data directory and prints a setting like this:
 
 ```json
 {
@@ -310,15 +324,31 @@ The command generates a launcher in Governor's data directory and prints JSON li
 }
 ```
 
-Add the setting printed by your command to VS Code's **Preferences: Open User Settings (JSON)**, retaining other settings. Then run **Developer: Reload Window**.
+In the VS Code command palette:
 
-When you continue a Governor-created task in VS Code, subsequent messages follow that task's control mode for model and reasoning selection. Other native sessions are not enrolled automatically. The native client still handles input, images, approvals, and security settings.
+1. Open **Preferences: Open User Settings (JSON)**.
+2. Add the `chatgpt.cliExecutable` setting printed by your command, keeping your other settings.
+3. Run **Developer: Reload Window**.
 
-The native model selector may continue to show its own choice. Check the `[Governor]` lines in Codex output logs and Governor's “Current” field for the configuration actually submitted. Independent reviews and other inference entry points are outside this integration's scope.
+You need to do this step yourself; Governor does not change VS Code settings automatically.
 
-The setting may change with extension updates. Regenerate the integration files and check them after upgrades or moving the Governor installation. To restore the default setup, remove `chatgpt.cliExecutable` and reload the window.
+#### 3. Continue your task
 
-For source installs, run `npm run build` first and replace `codex-governor` above with `node dist/cli.js`. See [native integration details](docs/native-integration.md) for interface references, launcher limitations, and verification scope.
+Open the Codex conversation for your Governor-created task in VS Code and send your next message. In **Auto** mode, Governor selects the model and reasoning effort before each turn based on quota and priority.
+
+This integration only manages tasks created by Governor. Conversations you create separately in Codex are not enrolled automatically. Codex still handles images, tool approvals, and security settings. Independent code reviews and other inference entry points are outside this integration's scope.
+
+**The model name shown in the interface may not update.** To check the model and reasoning effort actually submitted, look at the `[Governor]` lines in Codex output logs or Governor's “Current” field.
+
+This is experimental. After a Codex extension update or a change to Governor's installation location, you may need to regenerate the integration files. To restore the original setup, remove `chatgpt.cliExecutable` from VS Code settings and reload the window.
+
+For source installs, run `npm run build` first and replace `codex-governor` above with `node dist/cli.js`. See [native integration details](docs/native-integration.md) for limitations and verification scope.
+
+### Can the Codex desktop App use this integration?
+
+Not currently. You can open a Governor-created conversation in the App, view its history, and continue chatting, but later messages use the App's own model settings. Governor cannot override them.
+
+To keep automatic model selection for later messages, continue in Governor's CLI/TUI or use the experimental VS Code integration above, with the task in Auto mode.
 
 ## Compatibility and doctor
 
