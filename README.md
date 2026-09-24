@@ -2,27 +2,33 @@
 
 [简体中文](README.zh-CN.md)
 
-When several Codex tasks are running, you may want to keep the strongest setup for a release fix while letting routine documentation work use less. Quota monitors show what remains, but deciding what each task should use for its next message usually means checking the limits and changing settings yourself.
+Codex quota can run out while you're still working. When several tasks run at once, you want to save it for the work that matters most: fixing code may need a stronger model, while tidying documentation may not. Most quota monitors show what remains, but choosing and adjusting the model for each task's next message is still up to you.
 
-Codex Resource Governor makes that decision just before a task's next turn. Set a Normal and an Economy model/effort pair, give each task a priority, and choose a Quality, Balanced, or Saver policy. Governor reads quota and available models through the Codex App Server, then chooses the pair **before each new user turn**. It never switches models during an active turn. Tools such as [Codex Usage Monitor](https://github.com/Corread8/codex-usage-monitor) and [Codex Monitor](https://github.com/manuelsh/codex-monitor) focus on viewing quota or understanding past usage; Governor focuses on the next managed turn. They can work together.
+Codex Resource Governor makes that decision before a task's next turn. Set a Normal and an Economy model/effort pair, give each task a priority, and choose a Quality, Balanced, or Saver policy. Governor reads quota and available models through Codex App Server, then chooses the configuration **before each new user turn**. It never switches models during an active turn. Tools such as [Codex Usage Monitor](https://github.com/Corread8/codex-usage-monitor) and [Codex Monitor](https://github.com/manuelsh/codex-monitor) focus on viewing quota or reviewing usage; Governor focuses on allocating the remaining quota according to task priority.
 
-It is most useful when several managed sessions share tight quota. High priority keeps Normal; Normal and Low can reduce reasoning or move to Economy as quota tightens. You choose the Economy model yourself; Governor does not infer prices or promise a particular saving. For one occasional session with plenty of quota, using Codex directly is usually simpler.
+It is most useful when several managed sessions run at once and quota starts getting tight. High priority keeps Normal; Normal and Low can reduce reasoning effort or move to Economy as quota tightens. You choose the Economy model yourself; Governor does not infer prices from model names or promise a fixed saving. If you usually run a single session and never worry about quota, this project may not be useful to you.
 
-This is an independent MIT-licensed project, not an OpenAI product. v0.1 is a local CLI/TUI that manages threads it creates. Codex still handles login, conversation history, tools, and approvals. Threads created separately in the desktop app, IDE, or another CLI are not enrolled automatically.
+This is an independent MIT-licensed project. v0.1 provides a local CLI/TUI and manages only the tasks it creates. Codex still handles login, conversation history, tool calls, and approvals. Given the available integration interfaces, sessions created separately in the Codex desktop App, IDE, or another CLI are not enrolled automatically.
 
-## Install
+[Install](#install-and-setup) · [Quick start](#quick-start) · [Use cases](#typical-use-cases) · [Policy](#policy-and-quota) · [Session control](#session-control) · [Commands](#command-reference) · [Environment checks](#compatibility-and-doctor)
+
+## Install and setup
+
+### Requirements
 
 Before installing, have these ready:
 
 - **Node.js 20 or newer** and its bundled npm; use a recent patch release.
 - **A Codex executable that supports `app-server`**. Governor launches Codex; it does not install it. On macOS, it checks `PATH`, then the VS Code Codex extension and ChatGPT App bundles. On Linux/WSL2, put `codex` on `PATH`. To select an exact binary, set `CODEX_GOVERNOR_CODEX=/absolute/path/to/codex`.
-- **A ChatGPT login in Codex**. Run `codex login` first. Governor reuses that login and does not need a separate API key. API-key-only accounts cannot use this ChatGPT quota policy.
+- **A ChatGPT login in Codex**. Run `codex login` first. Governor reuses that login and does not need a separate API key. API-key-only accounts cannot use this ChatGPT quota management.
 
-If `codex` is not on `PATH`, set `CODEX_GOVERNOR_CODEX` to the actual executable path and run `"$CODEX_GOVERNOR_CODEX" login`. After installation, use `codex-governor doctor` (or `node dist/cli.js doctor` from source) to check the binary, login, and protocol support.
+If your terminal cannot find `codex`, set `CODEX_GOVERNOR_CODEX` to the actual executable path and run `"$CODEX_GOVERNOR_CODEX" login`. After installation, use `codex-governor doctor` (or `node dist/cli.js doctor` from source) to check the binary, login, and protocol support.
 
-Governor targets macOS and Linux; use WSL2 on Windows. Allow memory for Codex itself: plan for at least 4 GB, with 8 GB more comfortable. npm installs Governor's JavaScript dependencies through `npm ci` or `npm install`; you do not need to install React, Ink, or the other packages separately.
+Governor targets macOS and Linux; use WSL2 on Windows. Allow memory for Codex itself: plan for at least 4 GB, with 8 GB more comfortable. npm installs Governor's JavaScript dependencies through `npm ci` or `npm install`; you do not need to install React, Ink, or other packages separately.
 
-Once the npm package is published, install globally with:
+### Install from npm
+
+The package is available on [npm](https://www.npmjs.com/package/codex-resource-governor). Install it globally with:
 
 ```sh
 npm install -g codex-resource-governor
@@ -31,16 +37,16 @@ codex-governor config
 codex-governor
 ```
 
-The initial setup asks for **English / 简体中文**, Normal model/effort, Economy model/effort, and policy. Choices come from your live `model/list` response. You select which model you consider economical: the catalog does not establish prices or guarantee savings. There is no interactive npm lifecycle hook; language selection happens during setup, so automated installs cannot hang.
+### First-time setup
 
-To select Chinese during installation and setup:
+The setup wizard asks for English / 简体中文, the Normal model and reasoning effort, the Economy model and reasoning effort, and a policy. Available choices come from your account's `model/list` response. You choose the Economy model yourself.
 
-```sh
-npm install -g codex-resource-governor
-codex-governor config --lang zh-CN
-```
+Language selection happens after installation, during setup. npm lifecycle hooks do not prompt for input, so automated installs will not wait for a response. The default language is English; use `CODEX_GOVERNOR_LANG=zh-CN` or `codex-governor config --lang zh-CN` for Chinese. `--lang` takes precedence.
 
-You can also install from GitHub source (Git is required):
+<details>
+<summary>Install from source (for development or local changes)</summary>
+
+You can also install from GitHub source. Git is required:
 
 ```sh
 git clone https://github.com/shuwei1006/codex-resource-governor.git
@@ -51,62 +57,63 @@ node dist/cli.js doctor
 node dist/cli.js config
 ```
 
-With the source build, use `node dist/cli.js run "Task description"`. If you want the global `codex-governor` command, run `npm link` from the project directory. Contributors can run `npm test`. GitHub and npm are separate publishing destinations; the remote install commands above work only after the corresponding release is live.
+With the source build, use `node dist/cli.js run "Task description"`. To use the global `codex-governor` command, run `npm link` from the project directory. Contributors can run `npm test`.
 
-## Commands
+</details>
 
-| Command | Purpose |
-| --- | --- |
-| `codex-governor` | Open the TUI (first launch offers setup) |
-| `codex-governor doctor` | Probe environment, authentication, schema, and App Server methods |
-| `codex-governor config` | Configure Normal / Economy / policy / language |
-| `codex-governor run --priority high "Create a Mid-Autumn Festival greeting card"` | Automatically name, create, and execute a task |
-| `codex-governor list [--json]` | Show task IDs and Codex thread IDs |
-| `codex-governor open <id> --target app\|vscode\|both` | Open a completed task in native Codex clients |
-| `codex-governor integration vscode --codex /path/to/codex` | Generate an experimental IDE policy proxy launcher and settings snippet |
-| `codex-governor priority <id> high\|normal\|low` | Change task priority |
-| `codex-governor mode <id> auto\|manual\|off` | Automatic, fixed, or native selection (legacy keep remains supported) |
-| `codex-governor interrupt <id>` | Interrupt an active turn, including one started in another terminal |
-| `codex-governor delete <id>` | Delete the local task record; interrupt an active turn first |
-| `codex-governor policy quality\|balanced\|saver` | Change policy |
-| `codex-governor explain <id>` | Explain the next-turn decision |
+<details>
+<summary>Non-interactive configuration for scripts</summary>
 
-Task IDs can be unique prefixes. `run --cwd /path/to/project "Task description"` sets the task directory; otherwise it uses the current directory. Continue a task from its TUI details with Enter. `interrupt <id>` starts its own App Server session, resumes the stored thread, and requests interruption with the stored turn ID, so it works from another terminal. `delete <id>` removes only Governor's local record, not the Codex thread history; if the record is active, interruption must succeed before deletion. Ctrl+C/Q closes the session and requests interruption of its active turns.
+Use `--normal-model`, `--normal-effort`, `--economy-model`, `--economy-effort`, `--policy`, and `--lang`. Initial setup requires the complete model configuration; later updates need only the fields you want to change. Model IDs and reasoning levels must be supported by your account.
 
-Start real work with one sentence:
+</details>
+
+## Quick start
+
+Create and run a task with one sentence:
 
 ```sh
-codex-governor run --priority high "Create a Mid-Autumn Festival greeting card"
+codex-governor run --priority high "Create a PPT about Codex"
 ```
 
-Governor derives a display name locally, creates a Codex thread, selects the model/effort according to quota, priority and policy, then sends the complete prompt through `turn/start`. In an interactive terminal, the TUI opens the task details and execution starts automatically, without another Enter. With redirected output, the command waits for completion and prints the response; interactive requests are explicitly declined.
+Governor derives a display name locally, creates a Codex thread, selects the model and reasoning effort according to quota, priority, and policy, then sends the complete prompt through `turn/start`. In an interactive terminal, the TUI opens the task details and execution starts automatically, without another Enter. With redirected output, the command waits for completion and prints the response; interactive approval requests are explicitly declined.
 
-Naming uses local text rules: take the first sentence/line, simplify common request prefixes, and limit the label to 32 Unicode characters including any ellipsis. Naming does not call a model or shorten the input sent to Codex. Override the name when needed:
+<details>
+<summary>Custom task names and other run options</summary>
+
+Naming uses local text rules: take the first sentence or line, simplify common request prefixes, and limit the label to 32 Unicode characters, including any ellipsis. Naming does not call a model or shorten the input sent to Codex. You can also specify the name:
 
 ```sh
-codex-governor run --name "Holiday card" --priority high "Create a Mid-Autumn Festival greeting card"
+codex-governor run --name "Codex PPT" --priority high "Create a PPT about Codex"
 ```
 
-The existing `run --name "Title" --prompt "Task description"` syntax still works. Do not combine `--prompt` with a positional prompt. With only `run --name "Title"`, the previous interactive behavior is preserved: create the task and open its details to await input. Blank prompts are rejected before thread creation.
+The existing `run --name "Title" --prompt "Task description"` syntax still works. Do not combine `--prompt` with a positional prompt. With only `run --name "Title"`, Governor creates the task and opens its details to await input. Blank prompts are rejected before thread creation.
 
-For unattended configuration, provide actual advertised identifiers:
+</details>
+
+### Continue, interrupt, and delete tasks
+
+Tasks run in the current directory by default; use `--cwd /path/to/project` to select another directory. In the TUI, open a task's details and press Enter to enter a follow-up request.
 
 ```sh
-codex-governor config \
-  --normal-model MODEL_FROM_CATALOG --normal-effort EFFORT_FROM_CATALOG \
-  --economy-model ECONOMY_FROM_CATALOG --economy-effort EFFORT_FROM_CATALOG \
-  --policy balanced --lang en
+codex-governor list
+codex-governor interrupt <id>
+codex-governor delete <id>
 ```
 
-Existing configuration can be updated with only the changed flags. `CODEX_GOVERNOR_LANG=en|zh-CN` sets the initial setup language. `--lang` overrides it.
+`list` shows both Governor task IDs and Codex thread IDs. Use the Governor task ID for `<id>`; unambiguous prefixes also work. You can run `interrupt` from another terminal. `delete` removes only Governor's local record, preserving the Codex conversation history. A running task must be successfully interrupted before its record can be deleted.
+
+### What counts as a turn?
+
+A **turn** starts when one user message is submitted and ends when that response completes, fails, or is interrupted. Tool calls, shell commands, and file edits made while handling the message belong to that same turn. The model and reasoning effort stay fixed during execution; Governor evaluates the next selection before the next turn starts.
 
 ## Typical use cases
 
-Governor is most useful when several Codex sessions share a limited account quota. It does not schedule work in the background; each task is a separate Codex thread that you start and continue explicitly. A **turn** begins when one user message is submitted and ends when that response completes, fails, or is interrupted. Tool calls, shell commands, and file edits made while handling that message remain part of the same turn. The selected model and reasoning effort stay fixed during an active turn, and Governor evaluates the next selection immediately before the next turn starts.
+These examples use automatic control. To run tasks concurrently, start them in separate terminals; Governor does not create a background task queue.
 
-### Protect an important task while several sessions run
+### Protect important work while several sessions run
 
-Keep a release fix on the Normal configuration while allowing routine work to reduce reasoning or use Economy as quota tightens:
+Keep a release fix on the Normal configuration while allowing routine work to reduce reasoning effort or use Economy as quota tightens:
 
 ```sh
 codex-governor run --priority high "Fix the release-blocking authentication regression"
@@ -114,11 +121,11 @@ codex-governor run --priority normal "Add tests for the settings page"
 codex-governor run --priority low "Summarize these archived design notes"
 ```
 
-High priority always uses the configured Normal model/effort in Auto mode. Normal and Low tasks follow the selected quota policy. This is the clearest fit for Governor: concurrent sessions, different business importance, and limited quota.
+High priority always uses the configured Normal model and reasoning effort in Auto mode. Normal and Low tasks follow the current quota and policy. This is the clearest fit for Governor: concurrent sessions, tasks of different importance, and limited quota.
 
-### Start a long deliverable at full quality, then economize on revisions
+### Use Normal for the first draft, then adjust revisions to quota
 
-A slide deck, report, website, or refactor often needs the strongest configuration for its first complete draft, while later edits can follow quota pressure:
+A slide deck, report, website, or large refactor often needs a strong first draft, while smaller follow-up edits can use a configuration suited to the remaining quota:
 
 ```sh
 codex-governor run --priority high "Create the first complete draft of the product launch deck"
@@ -126,11 +133,11 @@ codex-governor run --priority high "Create the first complete draft of the produ
 codex-governor priority <id> normal
 ```
 
-The first turn remains on Normal for its entire execution. Before each later request, such as “revise slide 3” or “check the exported file,” Governor refreshes quota and chooses Normal, lower reasoning, or Economy. It never changes models halfway through generating the deck.
+The first turn stays on Normal throughout. Before each later request, such as “revise slide 3” or “check the exported file,” Governor refreshes quota and chooses Normal, lower reasoning, or Economy. It never switches models halfway through making the deck.
 
-### Run routine or batch work conservatively
+### Use a more conservative policy for routine tasks
 
-Use Low priority with the Saver policy for tasks where throughput matters more than maximum reasoning quality:
+Use Low priority with Saver for tasks where throughput matters more than maximum reasoning quality:
 
 ```sh
 codex-governor policy saver
@@ -138,33 +145,72 @@ codex-governor run --priority low "Normalize formatting across the documentation
 codex-governor run --priority low "Summarize completed test logs"
 ```
 
-Saver begins tightening earlier than Balanced or Quality. The actual Economy model is the one you selected during configuration; Governor does not infer model price or cost.
+Saver starts reducing the configuration earlier than Balanced or Quality. The Economy model is the one you select during setup; Governor does not infer model prices or costs.
 
-### Pin a known model for a sensitive sequence of turns
+## Policy and quota
 
-Manual mode is useful for a review, migration, or reproducibility check that must keep one validated model/effort pair regardless of quota and priority:
-
-```sh
-codex-governor mode <id> manual --model MODEL_ID --effort high
-```
-
-The pair remains fixed until the mode is explicitly changed. Switch back with `codex-governor mode <id> auto`.
-
-### Temporarily return control to the native client
-
-If a managed VS Code thread needs a one-off choice from the native model selector, turn governance off first:
+Inspect the saved configuration, switch policy, or explain a task's next-turn selection:
 
 ```sh
-codex-governor mode <id> off
+codex-governor config --show
+codex-governor policy balanced
+codex-governor explain <id>
 ```
 
-The IDE proxy then preserves the native `turn/start` selection. Switch to Auto to resume quota-aware selection. Codex desktop App and plain `codex resume` messages remain outside Governor interception.
+Normal and Economy are your two configured model/effort pairs; `high`, `normal`, and `low` are task priorities. In Auto mode, High uses Normal, while Normal and Low follow the table below. See [session control](#session-control) for Manual and Off.
 
-Governor adds less value for a single occasional session with ample quota, or when all interaction stays in the Codex desktop App. In those cases, the native Codex experience is usually simpler.
+These thresholds are **project defaults, not official OpenAI rules**. All boundaries use strict “less than.”
+
+| Policy | Reduce Normal/Low reasoning by one supported level | Switch to Economy |
+| --- | --- | --- |
+| quality | Below 10% remaining | Below 5%, Low only |
+| balanced (default) | Below 20% remaining | Below 10%, Normal/Low |
+| saver | Below 40% remaining | Below 20%, Normal/Low |
+
+When both 5-hour and weekly quota windows are available, Governor uses the lower remaining percentage. Within a quota cycle, automatic selection can only stay at its current level or step down; the corresponding restriction is released after that window resets. If quota is temporarily unavailable, existing restrictions remain in place. Unknown quota is not treated as zero.
+
+Quota refreshes every 30 seconds, when updates arrive, and before each turn. Press R in the TUI to refresh immediately, including settings changed from another terminal.
+
+<details>
+<summary>Quota windows, downgrades, and reset rules</summary>
+
+High priority in Auto mode and legacy Keep mode use Normal; Manual and Off take precedence. Effective quota is the minimum remaining percentage across valid 5-hour and weekly windows. Windows are identified by duration (300 / 10080 minutes); `primary` is not assumed to mean 5 hours. Governor prefers the global `codex` bucket and does not treat model-specific quota as global. Unknown durations, expired snapshots, invalid percentages, and missing data are unavailable, not zero.
+
+Within a cycle, automatic selection only moves from `Normal → Lower Reasoning → Economy`. Each task records separate restrictions for the two windows. A window's restriction is released only after its old reset time has passed and a fresh, valid snapshot reports a later reset time. A 5-hour reset does not release a weekly restriction. Missing quota or reset times retain existing restrictions without adding a new downgrade.
+
+High and Keep temporarily bypass cycle restrictions; switching back to Auto can reapply them. Changing policy or configuration does not clear cycle records, although explicitly configuring another model/effort pair affects future selections. Reasoning drops by only one supported level, not another level on every refresh. Unknown future reasoning levels, or models with no lower supported level, keep their current setting.
+
+An atomic reservation prevents duplicate starts for the same task.
+
+</details>
+
+## Command reference
+
+| Command | Purpose |
+| --- | --- |
+| `codex-governor` | Open the TUI; first launch offers setup |
+| `codex-governor doctor` | Check the environment, login, schema, and App Server capabilities |
+| `codex-governor config` | Configure Normal / Economy / policy / language |
+| `codex-governor run --priority high "Create a PPT about Codex"` | Automatically name, create, and execute a task |
+| `codex-governor list [--json]` | Show task IDs and Codex thread IDs |
+| `codex-governor open <id> --target app\|vscode\|both` | Open a completed task in native Codex clients |
+| `codex-governor integration vscode --codex /path/to/codex` | Generate the files and settings instructions to connect VS Code to Governor, so it can select models for follow-up messages in Governor-created tasks. This integration may change with Codex extension updates. |
+| `codex-governor priority <id> high\|normal\|low` | Change task priority |
+| `codex-governor mode <id> auto\|manual\|off` | Automatic, fixed, or native selection; legacy keep is supported. See session control below. |
+| `codex-governor interrupt <id>` | Interrupt an active turn, including from another terminal |
+| `codex-governor delete <id>` | Delete the local task record; interrupt a running turn first |
+| `codex-governor policy quality\|balanced\|saver` | Switch policy |
+| `codex-governor explain <id>` | Explain the next-turn selection |
+
+Use `codex-governor <command> --help` for more options.
 
 ## Session control
 
-Auto uses Governor policy. Manual fixes an explicit validated model/effort pair until changed, overriding quota and priority. Off passes native IDE requests unchanged and disables Governor prompt dispatch. Legacy Keep follows the latest Normal configuration.
+| Mode | Who chooses the model and reasoning effort? | When to use it |
+| --- | --- | --- |
+| `auto` | Governor follows quota, priority, and policy | Everyday automatic management |
+| `manual` | Your explicit pair stays fixed regardless of quota and priority | Several turns need the same configuration |
+| `off` | The native client uses its settings; Governor stops sending new prompts | Choose models yourself in VS Code with the proxy configured |
 
 ```sh
 codex-governor mode <id> manual --model MODEL_ID --effort EFFORT
@@ -172,118 +218,130 @@ codex-governor mode <id> off
 codex-governor mode <id> auto
 ```
 
-Changes affect future turn reservations, not active execution. Invalid manual pairs retain the previous mode. Current records the last acknowledged selection and mode; off-mode native history may be stale. Use TUI M for the manual model/effort picker. Explicitly choose off to honor the native selector; different incoming fields are not proof of a manual user action. App/plain CLI traffic remains outside the proxy in every mode. See [session control and conflict rules](docs/session-control.md).
+Manual requires both a model and a reasoning level supported by your account. It remains active until you switch modes. Changes affect future turns and do not interrupt active work. Press M in the TUI to change modes.
 
-## Continue in native Codex clients
+To use the native model selector in VS Code connected to Governor, switch the task to `off` first. The desktop App and plain `codex resume` bypass Governor and always use their own settings. In Off mode, “Current” may only describe the last managed turn.
 
-Open the same conversation automatically **after the Governor turn completes successfully**:
+Legacy `keep` remains supported and uses the latest Normal configuration. See [session control and conflict rules](docs/session-control.md) for details.
+
+## Using the TUI
+
+The main screen shows the current policy, 5-hour/weekly quota, and a task list paginated to fit the terminal. Each task shows:
+
+```text
+Current:   <Normal model> · high
+Next turn: <Economy model> · medium
+```
+
+“Current” is the model/effort submitted for the current or last turn, not a live server-side attestation. “Next turn” is the latest policy selection. Automatic downgrades never switch the model of an active turn.
+
+| Key | Action |
+| --- | --- |
+| ↑ / ↓, Enter | Select tasks or scroll details; open details or enter a follow-up |
+| N, C | Create a task; open configuration |
+| P, M, E | Change priority; switch control mode; explain the selection |
+| O | Open the task in the App, VS Code, or both |
+| R | Refresh immediately |
+| I, D | Interrupt the task; confirm deletion of its local record |
+| Esc | Go back |
+| Q / Ctrl+C | Exit and request interruption of turns running in this session |
+
+Command and file-change approvals support “Allow once / Deny”; user questions accept text answers. Other server-initiated request types are explicitly declined.
+
+Task details stream model output and retain only the latest turn's tail, up to about 32,000 characters. Codex stores the full conversation.
+
+## Continue tasks in Codex App and VS Code
+
+A task runs in Governor first. **After that turn completes successfully**, it can open the same Codex conversation automatically:
 
 ```sh
-codex-governor run --open both --priority high "Create a Mid-Autumn Festival greeting card"
+codex-governor run --priority high --open both "Create a PPT about Codex"
+
+# Save the preference for later run commands:
 codex-governor config --open-in both
+
+# Open an existing task, or print its links:
 codex-governor list
 codex-governor open <id> --target vscode
 codex-governor open <id> --target app
 codex-governor open <id> --target both --print
 ```
 
-The saved `--open-in` preference applies to subsequent `run` commands; `--open none` overrides it. Running, uncertain, and never-submitted threads cannot be handed off. Failed application launches retain the task and result; retry `open` instead of rerunning the prompt. `--print` prints links without opening applications. The TUI's **O** key offers the same destinations.
+`--open none` overrides the saved preference. Running, uncertain, or never-submitted tasks cannot be handed off, to avoid two clients continuing the same thread at once. Failed application launches retain the task and result; install the relevant app and retry `open` without rerunning the task. `open --print` prints links without opening applications.
 
-Governor attempts to synchronize task titles using `thread/name/set`. It prints both IDs; the native links use the **Codex thread UUID**, not the Governor task ID. App uses the documented `codex://threads/<id>` link; VS Code uses the installed extension's version-dependent `vscode://openai.chatgpt/local/<id>` route. Both clients must share the same local Codex storage (`CODEX_HOME`). This is a completed-turn handoff, not a live view of another process or cloud synchronization.
+The App and VS Code must run on the same machine and use the same local Codex conversation storage (`CODEX_HOME`). This opens a conversation after execution has completed; it is not a live mirror of another process. Do not send messages to the same thread from both clients at once.
 
 | Client | Open history and continue | Governor selection on later turns |
 | --- | --- | --- |
-| VS Code Codex extension | Thread deep link | Managed `turn/start` calls only, after installing the experimental proxy below |
-| Codex desktop App | Thread deep link | **Not supported**; messages use App settings |
+| VS Code Codex extension | Open by thread | Managed `turn/start` calls, after configuring the experimental proxy below |
+| Codex desktop App | Open by thread | **Not supported**; new messages use App settings |
 
-No public desktop per-turn selection interception interface has been established. Opening a deep link does not enable one. Use one client at a time to continue a thread. A plain `codex resume` also bypasses Governor.
+### Keep automatic selection in VS Code
 
-To retain governance in VS Code, build and generate a launcher:
+This integration is experimental. Complete Governor's model configuration first, then generate the integration files:
 
 ```sh
-npm run build
-node dist/cli.js integration vscode --codex "$(command -v codex)"
+codex-governor integration vscode --codex /absolute/path/to/codex
 ```
 
-Merge the printed `chatgpt.cliExecutable` setting into **Preferences: Open User Settings (JSON)**, retaining other settings, then run **Developer: Reload Window**. The command generates a launcher in Governor's private data directory and does not edit VS Code settings. Prefer the extension's bundled real Codex executable for `--codex` to avoid version mismatches. This official setting is development-only and can break across extension upgrades; regenerate the launcher after upgrades or moving the project. Remove the setting and reload to undo.
+Replace the path with your actual Codex executable. If `codex` is on `PATH`, use `command -v codex` to find it. Prefer the executable bundled with your current VS Code extension to reduce version mismatches.
 
-For managed threads, the proxy refreshes models, quota, and configuration before each `turn/start`, applies model/effort (including collaboration-mode overrides), and records the result in Governor state. Native prompts, images, approvals, security settings, and notifications are preserved. Unmanaged threads pass through unchanged. Independent review and other inference entry points are outside this interception scope. `[Governor]` entries in Codex output logs report the actual selection; the native model selector may still show its own choice. See [native integration details and verification limits](docs/native-integration.md).
+The command generates a launcher in Governor's data directory and prints JSON like this. **It does not edit VS Code settings automatically**:
 
-## TUI
-
-```text
-CODEX RESOURCE GOVERNOR
-Policy: balanced
-5h      63% remaining
-Weekly  18% remaining
-
-TASKS
-› Research HIGH · auto · running
-  Current:   <normal model> · high
-  Next turn: <normal model> · high
-  NORMAL
-
-  Slides NORMAL · auto · running
-  Current:   <normal model> · high
-  Next turn: <normal model> · medium
-  REASONING REDUCED
-
-Enter Details/Prompt  P Priority  M Mode  O Open Codex
-E Explain  C Config  N New  R Refresh  I Interrupt  D Delete  Q Quit
+```json
+{
+  "chatgpt.cliExecutable": "/absolute/path/to/codex-governor-ide"
+}
 ```
 
-The screen pages tasks to fit the terminal. Arrow keys navigate tasks and scroll details/explanations. Esc goes back. D opens a confirmation before deleting the selected local record. Details show streamed text; only the latest turn's bounded text tail is retained locally. Codex owns the full thread history. Command/file-change approval prompts support **Allow once / Deny**. User-input questions accept a text answer. Other server-initiated request types are explicitly rejected in v0.1. Pending requests take priority over task navigation.
+Add the setting printed by your command to VS Code's **Preferences: Open User Settings (JSON)**, retaining other settings. Then run **Developer: Reload Window**.
 
-**Current** is the model/effort submitted for the current or last turn, not a live server-side attestation. **Next turn** is the latest policy selection. Changes never interrupt a running turn to switch its model. Only an explicit interrupt action or closing the session requests cancellation.
+When you continue a Governor-created task in VS Code, subsequent messages follow that task's control mode for model and reasoning selection. Other native sessions are not enrolled automatically. The native client still handles input, images, approvals, and security settings.
 
-## Policy
+The native model selector may continue to show its own choice. Check the `[Governor]` lines in Codex output logs and Governor's “Current” field for the configuration actually submitted. Independent reviews and other inference entry points are outside this integration's scope.
 
-These thresholds are **project defaults, not official OpenAI rules**. Boundaries are strict `<`, not `<=`.
+The setting may change with extension updates. Regenerate the integration files and check them after upgrades or moving the Governor installation. To restore the default setup, remove `chatgpt.cliExecutable` and reload the window.
 
-| Policy | Reduce Normal/Low reasoning one supported level | Switch to Economy |
-| --- | --- | --- |
-| quality | Below 10% | Below 5%, Low only |
-| balanced (default) | Below 20% | Below 10%, Normal/Low |
-| saver | Below 40% | Below 20%, Normal/Low |
-
-High priority in Auto mode and legacy Keep mode select the Normal configuration; Manual/Off take precedence. For Auto tasks, the effective remaining percentage is the minimum of the valid 5h and weekly windows. Windows are recognized by their duration (300 / 10080 minutes), never by their position in the response. The global `codex` bucket is preferred; other model-specific buckets are not treated as global quota. Unknown durations, invalid percentages, expired snapshots, and absent data are unavailable, not zero.
-
-Within each window's quota cycle, automatic selections can only tighten:
-
-```text
-Normal → Lower Reasoning → Economy
-```
-
-Each task stores a separate hold for each quota window. A hold resets only after that window's previous reset time has passed **and** a fresh observation reports a later reset time. Resetting the 5h window cannot release a weekly hold. Missing data/reset times retain existing holds and never create a new downgrade. High/Keep temporarily bypass holds; switching back to Auto can reapply them. Policy/config changes affect future turns but do not erase cycle holds. A user-selected configuration can of course change the actual model/effort.
-
-Known reasoning levels are ordered semantically, but only supported values from `model/list` can be selected. Unknown future effort names and models already at their lowest supported level keep their effort instead of guessing. Reducing effort does not compound on every poll.
-
-Quota is refreshed every 30 seconds, on account notifications, and before each turn. TUI sessions observe changes made by other CLI processes on their next refresh; press R for an immediate refresh. Concurrent starts for the same task are blocked with an atomic reservation.
+For source installs, run `npm run build` first and replace `codex-governor` above with `node dist/cli.js`. See [native integration details](docs/native-integration.md) for interface references, launcher limitations, and verification scope.
 
 ## Compatibility and doctor
 
-The requested v0.1 target baseline is Codex CLI **0.154.0**. Development also checks the locally installed version; see [compatibility evidence](docs/compatibility.md). There is **no version-number gate**. The runtime generates the installed CLI's schema and probes capabilities. A missing required field/method or a non-ChatGPT account fails clearly. Governor never edits or scrapes Codex logs to simulate control.
+Governor does not require a fixed Codex CLI version. It checks whether the installed version provides the required App Server capabilities and reports missing fields or methods clearly. Model and reasoning settings are submitted through Codex App Server, not by reading or editing logs. See [compatibility evidence](docs/compatibility.md) for tested versions and scope.
 
-Default `doctor` checks Node, binary/version, installed schema, stdio handshake, `account/read`, quota, all `model/list` pages, and an ephemeral `thread/start`. It verifies `turn/start` dispatch with an intentionally nonexistent thread and validates that both override fields exist in the generated schema. This proves protocol support, **not successful inference or quota availability**.
+After installing or upgrading Codex, run the environment check:
+
+```sh
+codex-governor doctor
+```
+
+The default check covers Node, the Codex path, login, quota, the model catalog, and the interfaces needed to create a conversation and submit requests. It does not run real inference: **passing these checks does not guarantee a successful model call**.
+
+To verify a real call:
 
 ```sh
 codex-governor doctor --live-turn
 ```
 
-This additionally submits a real read-only “OK” request and waits for completion. It consumes account quota and is never used in CI. It cannot demonstrate relative quota savings between models.
+This runs one read-only request to reply “OK” and consumes account quota. CI does not run it, and it does not measure quota savings between models.
 
-If the quota service is temporarily unavailable, `doctor` reports failure. Already configured task management can continue with unknown quota and retained holds. If the App Server disconnects or a mutation times out, Governor does not retry a potentially accepted turn automatically. The task is marked unknown; its thread is resumed and checked before another turn is submitted.
+<details>
+<summary>Unavailable quota, disconnections, and conversation recovery</summary>
+
+A quota service failure causes doctor to fail. Configured tasks can still work with unknown quota while retaining existing cycle restrictions. A disconnected or timed-out write is not automatically retried if the turn may already have been accepted. The task is marked `unknown`; resume the thread and check for an active turn before submitting again.
+
+A thread that has never received a message may not yet have persisted Codex history. On reconnect, Governor can recreate a thread confirmed to be unused while retaining your task ID. If a turn may have been submitted, missing history produces an explicit error; Governor will not recreate the thread or replay input automatically.
+
+</details>
 
 ## Storage and privacy
 
-- Default: `$XDG_CONFIG_HOME/codex-resource-governor`, or `~/.config/codex-resource-governor`.
-- `CODEX_GOVERNOR_HOME` overrides the directory; `CODEX_GOVERNOR_CODEX` explicitly selects the Codex executable.
-- Without an override, Governor checks `PATH`, then the newest installed VS Code/OpenAI extension on macOS, then the ChatGPT App bundle. This allows commands from a second terminal even when `codex` was not installed globally.
-- Run `codex-governor config --path` to print the exact configuration path, or `codex-governor config --show` to print the saved configuration. These inspection commands do not connect to Codex.
-- `config.json` and `state.json` are schema-validated, written through fsync + atomic rename, and owner-readable/writable only on supported POSIX systems. A short filesystem lock serializes updates.
-- State contains managed thread IDs, task names/directories, priority/mode, quota-cycle holds, submitted configuration, and the most recent response tail. Prompts are not copied to Governor storage; Codex persists its own conversations.
-- No Governor backend, database, telemetry, login flow, or credential store. Credentials remain with Codex. Governor's own child App Server disables analytics and OpenTelemetry exporters. The experimental IDE proxy preserves the native client's launch options and telemetry configuration. Codex still contacts its required services.
-- New/resumed tasks use workspace-write sandboxing with on-request approval. Do not run untrusted tasks in a sensitive project directory.
+The default directory is `$XDG_CONFIG_HOME/codex-resource-governor`, or `~/.config/codex-resource-governor`. Use `CODEX_GOVERNOR_HOME` for a separate storage directory and `CODEX_GOVERNOR_CODEX` for an explicit Codex executable.
+
+Run `codex-governor config --path` for the exact configuration file path, or `codex-governor config --show` to inspect saved settings. Neither command connects to Codex.
+
+Configuration and state are schema-validated JSON, written using fsync, atomic rename, and a short file lock. Files have owner-only permissions (0600) on POSIX systems. State includes task names and directories, thread IDs, priority and mode, cycle restrictions, submitted model configuration, and the latest response tail. Governor does not store an extra copy of user prompts; Codex stores conversations through its own mechanisms.
+
+Governor has no backend, database, telemetry, or credential store; it reuses Codex login. Its own App Server subprocess disables analytics and OpenTelemetry exporters. The experimental IDE proxy retains the native client's launch options and telemetry configuration. Codex still contacts its required services. Governor-created tasks use workspace-write sandboxing with on-request approval; later IDE messages retain the native client's security settings.
 
 ## Development and release
 
@@ -296,10 +354,8 @@ npm run build
 npm pack --dry-run
 ```
 
-Tests run against isolated JSON directories and a deterministic fake stdio App Server; they do not read your Codex account. GitHub Actions covers Node 20/22 on Ubuntu/macOS without ChatGPT credentials. Local verification does not imply that this remote matrix has already run.
+Tests use temporary JSON directories and a simulated stdio server without reading ChatGPT credentials. GitHub Actions is configured for Node 20/22 on Ubuntu/macOS; passing locally does not establish that the remote matrix has run.
 
-See [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md), [architecture](docs/architecture.md), and the [release checklist](docs/releasing.md). This MVP intentionally omits background scheduling, arbitrary thread import, automatic price inference, web UI, and quota prediction.
+See [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md), [architecture](docs/architecture.md), and the [release checklist](docs/releasing.md) for contribution, vulnerability reporting, implementation, and publishing details. The MVP does not include background scheduling, external thread takeover, price inference, a web UI, or quota prediction.
 
-Protocol reference: [official Codex App Server documentation](https://developers.openai.com/codex/app-server). Wire fields are checked against schemas generated by the installed CLI.
-
-An unused thread may not yet have a Codex rollout on disk. After reconnecting, Governor can recreate that empty thread while keeping your task ID. Once any turn may have been submitted, missing thread history is an explicit error; Governor will not recreate it or replay input automatically.
+Protocol references: the [official Codex App Server documentation](https://developers.openai.com/codex/app-server) and schemas generated by the installed CLI.
