@@ -11,7 +11,7 @@ Codex Resource Governor 把这一步放到任务开始前。你设定主力配�
 节省配置由你自己指定，本项目不根据模型名称推断价格，也不承诺固定节省比例。
 但如果你经常只用一个会话且没有额度焦虑，那这个项目可能对你没什么用途。
 
-这是独立的 MIT 开源项目。v0.2 提供本地 CLI/TUI，只管理它创建的任务；
+这是独立的 MIT 开源项目。提供本地 CLI/TUI，只管理它创建的任务；
 Codex 仍负责登录、会话历史、工具调用和审批。
 注意，由于开放性限制，Codex桌面 App、IDE 或其他 CLI 《自行创建》的会话不会自动纳入管理。
 
@@ -27,17 +27,6 @@ Codex 仍负责登录、会话历史、工具调用和审批。
 | 思考强度（Reasoning Effort） | 模型支持的原始档位，如 `high`、`medium`、`low` | 单轮调用使用的思考强度 |
 
 例如：任务优先级为“高”，使用“主力配置”；主力配置可以是模型 A + `medium` 思考强度。高优先级并不要求 `high` 思考强度。
-
-**新命令与配置格式（0.2.0）：**主力配置使用 `--primary-model`、`--primary-effort` 和 JSON 的 `primary` 字段；中优先级使用 `--priority medium`。额度策略参数为 `quality-first`、`balanced`、`save-quota`。配置和任务状态文件的 `version` 均为 `2`。旧参数、旧字段和版本 1 的存储文件不再支持，也不会自动转换或覆盖。
-
-从旧版升级前先结束运行中的任务并备份原存储目录，再选择一个新的目录重新配置：
-
-```sh
-export CODEX_GOVERNOR_HOME="$HOME/.config/codex-resource-governor-v2"
-codex-governor config --lang zh-CN
-```
-
-其他终端也需使用相同的 `CODEX_GOVERNOR_HOME`。旧任务记录仍留在原目录，Codex 会话历史不受影响；新目录只管理重新创建的任务。源码安装时，将 `codex-governor` 替换为 `node dist/cli.js`。
 
 ## 安装与首次配置
 
@@ -57,7 +46,7 @@ Windows 建议使用 WSL2。
 
 ### 从 npm 安装
 
-目前 [npm](https://www.npmjs.com/package/codex-resource-governor) 已发布的是 **0.1.0**，仍使用旧命名；本 README 描述的是 **0.2.0 源码版本**。体验新命令请使用下面的源码安装。安装已发布版请参阅 [v0.1.0 文档](https://github.com/shuwei1006/codex-resource-governor/blob/v0.1.0/README.zh-CN.md)：
+可从 [npm](https://www.npmjs.com/package/codex-resource-governor) 安装。当前分支的命令尚待同步到 npm，使用本文中的命令请先按下方说明从源码安装。
 
 ```sh
 npm install -g codex-resource-governor
@@ -203,7 +192,7 @@ codex-governor explain <任务ID>
 <details>
 <summary>额度窗口、降档与重置的详细规则</summary>
 
-Auto 中的高优先级任务与旧 Keep 模式使用主力配置；Manual/Off 不受该规则覆盖。有效额度取可用的 5h/周窗口剩余百分比最小值。窗口按时长 300 / 10080 分钟识别，不假定 primary 一定是 5h。优先选择全局 `codex` bucket；不会把某模型的额度当作全局额度。未知时长、过期快照、异常百分比和缺失数据都视为不可用，不当作 0。
+Auto 中的高优先级任务与Keep 模式使用主力配置；Manual/Off 不受该规则覆盖。有效额度取可用的 5h/周窗口剩余百分比最小值。窗口按时长 300 / 10080 分钟识别，不假定 primary 一定是 5h。优先选择全局 `codex` bucket；不会把某模型的额度当作全局额度。未知时长、过期快照、异常百分比和缺失数据都视为不可用，不当作 0。
 
 同一周期内自动控制只会 `主力配置 → 降低思考强度 → 节省配置`。每个任务分别记录两个窗口的降档约束：旧重置时间已经过去，且新的有效快照提供了更晚的重置时间，才解除该窗口的约束。5h 重置不会解除周窗口触发的限制。缺失额度/重置时间时保持已有约束，不新增自动降档。
 
@@ -225,7 +214,7 @@ Auto 中的高优先级任务与旧 Keep 模式使用主力配置；Manual/Off �
 | `codex-governor open <id> --target app\|vscode\|both` | 在原生客户端打开已完成的任务 |
 | `codex-governor integration vscode --codex /path/to/codex` | 为 VS Code 生成接入 Governor 所需的文件和设置说明，你在 VS Code 中继续 Governor 创建的任务时，Governor 才能为后续消息选模型。（这个接入方式可能随 Codex 扩展升级而变化。） |
 | `codex-governor priority <id> high\|medium\|low` | 调整优先级 |
-| `codex-governor mode <id> auto\|manual\|off` | 自动选模／手动固定／原生控制；兼容 keep |（见下文会话控制部分）
+| `codex-governor mode <id> auto\|manual\|off` | 自动选模／手动固定／原生控制；keep 使用主力配置 |（见下文会话控制部分）
 | `codex-governor interrupt <id>` | 按任务 ID 中断运行中的 turn，支持从另一个终端操作 |
 | `codex-governor delete <id>` | 删除本地任务记录；运行中会先中断 |
 | `codex-governor policy quality-first\|balanced\|save-quota` | 切换策略 |
@@ -251,7 +240,7 @@ Manual 必须同时指定模型和思考强度，并通过当前账号的模型�
 
 在已接入 Governor 的 VS Code 中，若要使用原生模型选择器，先切换到 `off`。桌面 App 和直接运行的 `codex resume` 不经过 Governor，始终使用各自的设置。Off 下显示的“当前”配置可能只是上次执行的记录。
 
-旧 `keep` 模式仍兼容，表示使用最新的主力配置。详细规则见[控制权与冲突说明](docs/session-control.md)。
+`keep` 模式表示使用最新的主力配置。详细规则见[控制权与冲突说明](docs/session-control.md)。
 
 ## TUI 使用
 
