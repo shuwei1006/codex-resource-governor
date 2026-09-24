@@ -122,17 +122,22 @@ A **turn** starts when one user message is submitted and ends when that response
 
 These examples use automatic control. To run tasks concurrently, start them in separate terminals; Governor does not create a background task queue.
 
-### Protect important work while several sessions run
+### Work on frontend, backend, and UX in parallel
 
-Keep a release fix on the Primary configuration while allowing routine work to reduce reasoning effort or use Economy as quota tightens:
+When updating a login flow, open three sessions: one for the frontend, one for the backend, and one for UX copy. If the backend login failure is the most urgent issue, assign it High priority, the frontend Medium priority, and the UX copy changes Low priority. Run each command in a separate terminal:
 
 ```sh
-codex-governor run --priority high "Fix the release-blocking authentication regression"
-codex-governor run --priority medium "Add tests for the settings page"
-codex-governor run --priority low "Summarize these archived design notes"
+# Terminal 1: Frontend
+codex-governor run --priority medium "Update the frontend login page with a submitting state and API error display"
+
+# Terminal 2: Backend
+codex-governor run --priority high "Fix the authentication error in the backend login endpoint and add regression tests"
+
+# Terminal 3: UX
+codex-governor run --priority low "Improve the login flow's user-facing messages and record the recommendations in the UX document"
 ```
 
-High priority always uses the configured Primary model and reasoning effort in Auto mode. Medium and Low tasks follow the current quota and policy. This is the clearest fit for Governor: concurrent sessions, tasks of different importance, and limited quota.
+In Auto mode, the backend session keeps the Primary profile. Before each turn, the frontend and UX sessions may reduce reasoning effort or switch to Economy based on quota and policy. Priorities reflect the urgency of this particular change; they are not fixed by discipline. Each session runs its own task. Governor selects models but does not coordinate dependencies between sessions.
 
 ### Use Primary for the first draft, then adjust revisions to quota
 
