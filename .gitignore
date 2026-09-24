@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.tgz
+coverage/
+.env*
+.DS_Store
+.codex/
+.governor/
+.governor-demo/
