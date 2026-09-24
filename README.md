@@ -4,13 +4,35 @@
 
 Codex quota can run out while you're still working. When several tasks run at once, you want to save it for the work that matters most: fixing code may need a stronger model, while tidying documentation may not. Most quota monitors show what remains, but choosing and adjusting the model for each task's next message is still up to you.
 
-Codex Resource Governor makes that decision before a task's next turn. Set a Normal and an Economy model/effort pair, give each task a priority, and choose a Quality, Balanced, or Saver policy. Governor reads quota and available models through Codex App Server, then chooses the configuration **before each new user turn**. It never switches models during an active turn. Tools such as [Codex Usage Monitor](https://github.com/Corread8/codex-usage-monitor) and [Codex Monitor](https://github.com/manuelsh/codex-monitor) focus on viewing quota or reviewing usage; Governor focuses on allocating the remaining quota according to task priority.
+Codex Resource Governor makes that decision before a task's next turn. Set a Primary and an Economy model/effort pair, give each task a priority, and choose a Quality First, Balanced, or Save Quota policy. Governor reads quota and available models through Codex App Server, then chooses the configuration **before each new user turn**. It never switches models during an active turn. Tools such as [Codex Usage Monitor](https://github.com/Corread8/codex-usage-monitor) and [Codex Monitor](https://github.com/manuelsh/codex-monitor) focus on viewing quota or reviewing usage; Governor focuses on allocating the remaining quota according to task priority.
 
-It is most useful when several managed sessions run at once and quota starts getting tight. High priority keeps Normal; Normal and Low can reduce reasoning effort or move to Economy as quota tightens. You choose the Economy model yourself; Governor does not infer prices from model names or promise a fixed saving. If you usually run a single session and never worry about quota, this project may not be useful to you.
+It is most useful when several managed sessions run at once and quota starts getting tight. High priority keeps Primary; Medium and Low can reduce reasoning effort or move to Economy as quota tightens. You choose the Economy model yourself; Governor does not infer prices from model names or promise a fixed saving. If you usually run a single session and never worry about quota, this project may not be useful to you.
 
-This is an independent MIT-licensed project. v0.1 provides a local CLI/TUI and manages only the tasks it creates. Codex still handles login, conversation history, tool calls, and approvals. Given the available integration interfaces, sessions created separately in the Codex desktop App, IDE, or another CLI are not enrolled automatically.
+This is an independent MIT-licensed project. v0.2 provides a local CLI/TUI and manages only the tasks it creates. Codex still handles login, conversation history, tool calls, and approvals. Given the available integration interfaces, sessions created separately in the Codex desktop App, IDE, or another CLI are not enrolled automatically.
 
 [Install](#install-and-setup) · [Quick start](#quick-start) · [Use cases](#typical-use-cases) · [Policy](#policy-and-quota) · [Session control](#session-control) · [Commands](#command-reference) · [Environment checks](#compatibility-and-doctor)
+
+## Four settings with different roles
+
+| Setting | Display names | What it controls |
+| --- | --- | --- |
+| Model Profile | Primary / Economy | Two model and reasoning-effort pairs |
+| Task Priority | High / Medium / Low | Which tasks retain the Primary profile |
+| Quota Policy | Quality First / Balanced / Save Quota | When and for which tasks quota triggers a downgrade |
+| Reasoning Effort | The model's supported values, such as `high`, `medium`, or `low` | The reasoning level for an individual turn |
+
+For example, a task with High priority uses the Primary profile, which could be model A with `medium` reasoning effort. High task priority does not require `high` reasoning effort.
+
+**New CLI and storage format (0.2.0):** the Primary profile uses `--primary-model`, `--primary-effort`, and the JSON `primary` field. Medium task priority uses `--priority medium`. Quota policies are `quality-first`, `balanced`, and `save-quota`. Configuration and task state files both use `version: 2`. Old arguments, fields, and version 1 storage files are no longer supported and are never silently converted or overwritten.
+
+Before upgrading, finish active tasks and back up the old storage directory. Then select a new directory and configure it:
+
+```sh
+export CODEX_GOVERNOR_HOME="$HOME/.config/codex-resource-governor-v2"
+codex-governor config
+```
+
+Use the same `CODEX_GOVERNOR_HOME` in other terminals. Old task records remain in the original directory, and Codex conversation history is unaffected; the new directory manages newly created tasks only. For source installs, replace `codex-governor` with `node dist/cli.js`.
 
 ## Install and setup
 
@@ -28,7 +50,7 @@ Governor targets macOS and Linux; use WSL2 on Windows. Allow memory for Codex it
 
 ### Install from npm
 
-The package is available on [npm](https://www.npmjs.com/package/codex-resource-governor). Install it globally with:
+The version currently published on [npm](https://www.npmjs.com/package/codex-resource-governor) is **0.1.0**, with the old names. This README describes the **0.2.0 source version**; use the source installation below to try the new commands. For the published package, see the [v0.1.0 documentation](https://github.com/shuwei1006/codex-resource-governor/blob/v0.1.0/README.md):
 
 ```sh
 npm install -g codex-resource-governor
@@ -39,7 +61,7 @@ codex-governor
 
 ### First-time setup
 
-The setup wizard asks for English / 简体中文, the Normal model and reasoning effort, the Economy model and reasoning effort, and a policy. Available choices come from your account's `model/list` response. You choose the Economy model yourself.
+The setup wizard asks for English / 简体中文, the Primary model and reasoning effort, the Economy model and reasoning effort, and a policy. Available choices come from your account's `model/list` response. You choose the Economy model yourself.
 
 Language selection happens after installation, during setup. npm lifecycle hooks do not prompt for input, so automated installs will not wait for a response. The default language is English; use `CODEX_GOVERNOR_LANG=zh-CN` or `codex-governor config --lang zh-CN` for Chinese. `--lang` takes precedence.
 
@@ -64,7 +86,7 @@ With the source build, use `node dist/cli.js run "Task description"`. To use the
 <details>
 <summary>Non-interactive configuration for scripts</summary>
 
-Use `--normal-model`, `--normal-effort`, `--economy-model`, `--economy-effort`, `--policy`, and `--lang`. Initial setup requires the complete model configuration; later updates need only the fields you want to change. Model IDs and reasoning levels must be supported by your account.
+Use `--primary-model`, `--primary-effort`, `--economy-model`, `--economy-effort`, `--policy`, and `--lang`. Initial setup requires the complete model configuration; later updates need only the fields you want to change. Model IDs and reasoning levels must be supported by your account.
 
 </details>
 
@@ -113,39 +135,39 @@ These examples use automatic control. To run tasks concurrently, start them in s
 
 ### Protect important work while several sessions run
 
-Keep a release fix on the Normal configuration while allowing routine work to reduce reasoning effort or use Economy as quota tightens:
+Keep a release fix on the Primary configuration while allowing routine work to reduce reasoning effort or use Economy as quota tightens:
 
 ```sh
 codex-governor run --priority high "Fix the release-blocking authentication regression"
-codex-governor run --priority normal "Add tests for the settings page"
+codex-governor run --priority medium "Add tests for the settings page"
 codex-governor run --priority low "Summarize these archived design notes"
 ```
 
-High priority always uses the configured Normal model and reasoning effort in Auto mode. Normal and Low tasks follow the current quota and policy. This is the clearest fit for Governor: concurrent sessions, tasks of different importance, and limited quota.
+High priority always uses the configured Primary model and reasoning effort in Auto mode. Medium and Low tasks follow the current quota and policy. This is the clearest fit for Governor: concurrent sessions, tasks of different importance, and limited quota.
 
-### Use Normal for the first draft, then adjust revisions to quota
+### Use Primary for the first draft, then adjust revisions to quota
 
 A slide deck, report, website, or large refactor often needs a strong first draft, while smaller follow-up edits can use a configuration suited to the remaining quota:
 
 ```sh
 codex-governor run --priority high "Create the first complete draft of the product launch deck"
 # After the first turn completes:
-codex-governor priority <id> normal
+codex-governor priority <id> medium
 ```
 
-The first turn stays on Normal throughout. Before each later request, such as “revise slide 3” or “check the exported file,” Governor refreshes quota and chooses Normal, lower reasoning, or Economy. It never switches models halfway through making the deck.
+The first turn stays on Primary throughout. Before each later request, such as “revise slide 3” or “check the exported file,” Governor refreshes quota and chooses Primary, lower reasoning, or Economy. It never switches models halfway through making the deck.
 
 ### Use a more conservative policy for routine tasks
 
-Use Low priority with Saver for tasks where throughput matters more than maximum reasoning quality:
+Use Low priority with Save Quota for tasks where throughput matters more than maximum reasoning quality:
 
 ```sh
-codex-governor policy saver
+codex-governor policy save-quota
 codex-governor run --priority low "Normalize formatting across the documentation"
 codex-governor run --priority low "Summarize completed test logs"
 ```
 
-Saver starts reducing the configuration earlier than Balanced or Quality. The Economy model is the one you select during setup; Governor does not infer model prices or costs.
+Save Quota starts reducing the configuration earlier than Balanced or Quality First. The Economy model is the one you select during setup; Governor does not infer model prices or costs.
 
 ## Policy and quota
 
@@ -157,15 +179,15 @@ codex-governor policy balanced
 codex-governor explain <id>
 ```
 
-Normal and Economy are your two configured model/effort pairs; `high`, `normal`, and `low` are task priorities. In Auto mode, High uses Normal, while Normal and Low follow the table below. See [session control](#session-control) for Manual and Off.
+Primary and Economy are your two configured model/effort pairs; `high`, `medium`, and `low` are task priorities. In Auto mode, High uses Primary, while Medium and Low follow the table below. See [session control](#session-control) for Manual and Off.
 
 These thresholds are **project defaults, not official OpenAI rules**. All boundaries use strict “less than.”
 
-| Policy | Reduce Normal/Low reasoning by one supported level | Switch to Economy |
+| Quota Policy | Reduce Medium/Low reasoning by one supported level | Switch to Economy |
 | --- | --- | --- |
-| quality | Below 10% remaining | Below 5%, Low only |
-| balanced (default) | Below 20% remaining | Below 10%, Normal/Low |
-| saver | Below 40% remaining | Below 20%, Normal/Low |
+| Quality First (`quality-first`) | Below 10% remaining | Below 5%, Low only |
+| Balanced (`balanced`, default) | Below 20% remaining | Below 10%, Medium/Low |
+| Save Quota (`save-quota`) | Below 40% remaining | Below 20%, Medium/Low |
 
 When both 5-hour and weekly quota windows are available, Governor uses the lower remaining percentage. Within a quota cycle, automatic selection can only stay at its current level or step down; the corresponding restriction is released after that window resets. If quota is temporarily unavailable, existing restrictions remain in place. Unknown quota is not treated as zero.
 
@@ -174,9 +196,9 @@ Quota refreshes every 30 seconds, when updates arrive, and before each turn. Pre
 <details>
 <summary>Quota windows, downgrades, and reset rules</summary>
 
-High priority in Auto mode and legacy Keep mode use Normal; Manual and Off take precedence. Effective quota is the minimum remaining percentage across valid 5-hour and weekly windows. Windows are identified by duration (300 / 10080 minutes); `primary` is not assumed to mean 5 hours. Governor prefers the global `codex` bucket and does not treat model-specific quota as global. Unknown durations, expired snapshots, invalid percentages, and missing data are unavailable, not zero.
+High priority in Auto mode and legacy Keep mode use Primary; Manual and Off take precedence. Effective quota is the minimum remaining percentage across valid 5-hour and weekly windows. Windows are identified by duration (300 / 10080 minutes); `primary` is not assumed to mean 5 hours. Governor prefers the global `codex` bucket and does not treat model-specific quota as global. Unknown durations, expired snapshots, invalid percentages, and missing data are unavailable, not zero.
 
-Within a cycle, automatic selection only moves from `Normal → Lower Reasoning → Economy`. Each task records separate restrictions for the two windows. A window's restriction is released only after its old reset time has passed and a fresh, valid snapshot reports a later reset time. A 5-hour reset does not release a weekly restriction. Missing quota or reset times retain existing restrictions without adding a new downgrade.
+Within a cycle, automatic selection only moves from `Primary → Lower Reasoning → Economy`. Each task records separate restrictions for the two windows. A window's restriction is released only after its old reset time has passed and a fresh, valid snapshot reports a later reset time. A 5-hour reset does not release a weekly restriction. Missing quota or reset times retain existing restrictions without adding a new downgrade.
 
 High and Keep temporarily bypass cycle restrictions; switching back to Auto can reapply them. Changing policy or configuration does not clear cycle records, although explicitly configuring another model/effort pair affects future selections. Reasoning drops by only one supported level, not another level on every refresh. Unknown future reasoning levels, or models with no lower supported level, keep their current setting.
 
@@ -190,16 +212,16 @@ An atomic reservation prevents duplicate starts for the same task.
 | --- | --- |
 | `codex-governor` | Open the TUI; first launch offers setup |
 | `codex-governor doctor` | Check the environment, login, schema, and App Server capabilities |
-| `codex-governor config` | Configure Normal / Economy / policy / language |
+| `codex-governor config` | Configure Primary / Economy model profiles, Quota Policy, and language |
 | `codex-governor run --priority high "Create a PPT about Codex"` | Automatically name, create, and execute a task |
 | `codex-governor list [--json]` | Show task IDs and Codex thread IDs |
 | `codex-governor open <id> --target app\|vscode\|both` | Open a completed task in native Codex clients |
 | `codex-governor integration vscode --codex /path/to/codex` | Generate the files and settings instructions to connect VS Code to Governor, so it can select models for follow-up messages in Governor-created tasks. This integration may change with Codex extension updates. |
-| `codex-governor priority <id> high\|normal\|low` | Change task priority |
+| `codex-governor priority <id> high\|medium\|low` | Change task priority |
 | `codex-governor mode <id> auto\|manual\|off` | Automatic, fixed, or native selection; legacy keep is supported. See session control below. |
 | `codex-governor interrupt <id>` | Interrupt an active turn, including from another terminal |
 | `codex-governor delete <id>` | Delete the local task record; interrupt a running turn first |
-| `codex-governor policy quality\|balanced\|saver` | Switch policy |
+| `codex-governor policy quality-first\|balanced\|save-quota` | Switch policy |
 | `codex-governor explain <id>` | Explain the next-turn selection |
 
 Use `codex-governor <command> --help` for more options.
@@ -222,15 +244,15 @@ Manual requires both a model and a reasoning level supported by your account. It
 
 To use the native model selector in VS Code connected to Governor, switch the task to `off` first. The desktop App and plain `codex resume` bypass Governor and always use their own settings. In Off mode, “Current” may only describe the last managed turn.
 
-Legacy `keep` remains supported and uses the latest Normal configuration. See [session control and conflict rules](docs/session-control.md) for details.
+Legacy `keep` remains supported and uses the latest Primary configuration. See [session control and conflict rules](docs/session-control.md) for details.
 
 ## Using the TUI
 
 The main screen shows the current policy, 5-hour/weekly quota, and a task list paginated to fit the terminal. Each task shows:
 
 ```text
-Current:   <Normal model> · high
-Next turn: <Economy model> · medium
+Current:   <Primary model> · Reasoning Effort: high
+Next turn: <Economy model> · Reasoning Effort: medium
 ```
 
 “Current” is the model/effort submitted for the current or last turn, not a live server-side attestation. “Next turn” is the latest policy selection. Automatic downgrades never switch the model of an active turn.

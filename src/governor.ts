@@ -73,10 +73,10 @@ export class Governor extends EventEmitter {
   decision(task: Task): Decision {return decide(task, this.config, this.quota, this.models);}
   explain(id: string): string {const task = this.task(id); return explain(task, this.config, this.decision(task), this.quota);}
   taskOutput(task: Task): string {return this.output.get(task.id) ?? task.output;}
-  async createTask(name: string, priority: Priority = 'normal', cwd = process.cwd()): Promise<Task> {
+  async createTask(name: string, priority: Priority = 'medium', cwd = process.cwd()): Promise<Task> {
     return this.serial(async () => {
       name = z.string().trim().min(1).max(120).parse(name);
-      const response = threadResponse.parse(await this.rpc.request('thread/start', {model: this.config.normal.model, cwd: resolve(cwd), sandbox: 'workspace-write', approvalPolicy: 'on-request'}));
+      const response = threadResponse.parse(await this.rpc.request('thread/start', {model: this.config.primary.model, cwd: resolve(cwd), sandbox: 'workspace-write', approvalPolicy: 'on-request'}));
       const task = taskSchema.parse({id: randomUUID(), threadId: response.thread.id, name, priority, mode: 'auto', cwd: resolve(cwd), createdAt: new Date().toISOString()});
       task.holds = this.decision(task).holds;
       this.tasks = (await this.store.update(s => s.tasks.push(task))).tasks;
@@ -132,7 +132,7 @@ export class Governor extends EventEmitter {
             // Codex may not persist an empty thread. Recreate only a provably unused
             // managed thread; never replay a possibly accepted user prompt.
             if (!(error instanceof RpcError) || !/no rollout found for thread id/i.test(error.message) || task.hasSubmitted || task.current || task.turnId) throw error;
-            const created = threadResponse.parse(await this.rpc.request('thread/start', {model: this.config.normal.model, cwd: task.cwd, sandbox: 'workspace-write', approvalPolicy: 'on-request'}));
+            const created = threadResponse.parse(await this.rpc.request('thread/start', {model: this.config.primary.model, cwd: task.cwd, sandbox: 'workspace-write', approvalPolicy: 'on-request'}));
             this.tasks = (await this.store.update(state => {state.tasks.find(t => t.id === taskId)!.threadId = created.thread.id;})).tasks;
             task = this.task(taskId);
           }

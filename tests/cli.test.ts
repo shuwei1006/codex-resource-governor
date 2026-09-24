@@ -19,15 +19,22 @@ test('public CLI config → run → priority → mode → policy → explain wor
   try {
     const help = await run('--help');
     for (const name of ['doctor', 'config', 'run', 'list', 'open', 'integration', 'priority', 'mode', 'interrupt', 'delete', 'policy', 'explain']) assert.ok(help.stdout.includes(name));
-    await run('config', '--normal-model', 'model-a', '--normal-effort', 'high', '--economy-model', 'model-b', '--economy-effort', 'medium', '--lang', 'zh-CN');
+    await run('config', '--primary-model', 'model-a', '--primary-effort', 'high', '--economy-model', 'model-b', '--economy-effort', 'medium', '--lang', 'zh-CN');
     assert.equal((await new Store(directory).config())?.language, 'zh-CN');
     const path = await exec(process.execPath, ['--import', 'tsx', cli, 'config', '--path'], {env: {...env, CODEX_GOVERNOR_CODEX: '/nonexistent/codex'}, timeout: 5000});
     assert.equal(path.stdout.trim(), join(directory, 'config.json'));
     const shown = await exec(process.execPath, ['--import', 'tsx', cli, 'config', '--show'], {env: {...env, CODEX_GOVERNOR_CODEX: '/nonexistent/codex'}, timeout: 5000});
     assert.equal(JSON.parse(shown.stdout).language, 'zh-CN');
-    const result = await run('run', '--name', '测试任务', '--priority', 'normal', '--prompt', 'Hello');
+    assert.equal(JSON.parse(shown.stdout).version, 2);
+    assert.deepEqual(JSON.parse(shown.stdout).primary, config.primary);
+    assert.ok(!('normal' in JSON.parse(shown.stdout)));
+    await run('policy', 'quality-first');
+    assert.equal((await new Store(directory).config())?.policy, 'quality-first');
+    await run('policy', 'balanced');
+    const result = await run('run', '--name', '测试任务', '--priority', 'medium', '--prompt', 'Hello');
     assert.match(result.stdout, /Fixture reply: OK/);
     const task = (await new Store(directory).state()).tasks[0]!;
+    assert.equal(task.priority, 'medium');
     assert.equal(task.status, 'completed'); assert.deepEqual(task.current, {model: 'model-a', effort: 'medium'});
     const listing = JSON.parse((await run('list', '--json')).stdout);
     assert.equal(listing[0].threadId, task.threadId);
@@ -45,10 +52,10 @@ test('public CLI config → run → priority → mode → policy → explain wor
     await exec(process.execPath, ['--import', 'tsx', cli, 'mode', task.id, 'off'], {env: offline, timeout: 5000});
     assert.equal((await new Store(directory).state()).tasks[0]?.mode, 'off');
     await run('mode', task.id, 'auto');
-    await run('policy', 'saver');
+    await run('policy', 'save-quota');
     const explanation = await run('explain', task.id);
-    assert.match(explanation.stdout, /High 优先级始终保持 Normal/);
-    assert.equal((await new Store(directory).config())?.policy, 'saver');
+    assert.match(explanation.stdout, /高任务优先级始终使用主力配置/);
+    assert.equal((await new Store(directory).config())?.policy, 'save-quota');
     await new Store(directory).update(state => {
       const saved = state.tasks.find(candidate => candidate.id === task.id)!;
       saved.status = 'running'; saved.turnId = 'fixture-running-turn'; saved.ownerPid = 999_999;
@@ -60,8 +67,8 @@ test('public CLI config → run → priority → mode → policy → explain wor
     assert.match(deleted.stdout, new RegExp(`Deleted ${task.id}`));
     assert.equal((await new Store(directory).state()).tasks.length, 0);
     await assert.rejects(run('priority', task.id, 'urgent'));
-    await assert.rejects(run('config', '--normal-model', 'invented-model'));
-    assert.equal((await new Store(directory).config())?.normal.model, 'model-a');
+    await assert.rejects(run('config', '--primary-model', 'invented-model'));
+    assert.equal((await new Store(directory).config())?.primary.model, 'model-a');
   } finally {await rm(directory, {recursive: true, force: true});}
 });
 
@@ -101,5 +108,36 @@ test('invalid run inputs fail before connecting to Codex or creating a task', as
       });
       assert.deepEqual((await new Store(directory).state()).tasks, []);
     }
+  } finally {await rm(directory, {recursive: true, force: true});}
+});
+
+test('CLI exposes new names and rejects legacy arguments before starting Codex', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'crg-cli-names-'));
+  const env = {...process.env, CODEX_GOVERNOR_HOME: directory, CODEX_GOVERNOR_CODEX: '/nonexistent/codex'};
+  const run = (...args: string[]) => exec(process.execPath, ['--import', 'tsx', cli, ...args], {env, timeout: 5000});
+  try {
+    const help = (await run('config', '--help')).stdout;
+    assert.match(help, /--primary-model/);
+    assert.match(help, /--primary-effort/);
+    assert.doesNotMatch(help, /--normal-/);
+    assert.match((await run('run', '--help')).stdout, /default: "medium"/);
+    assert.equal((await run('--version')).stdout.trim(), '0.2.0');
+    for (const args of [
+      ['config', '--normal-model', 'model-a'],
+      ['config', '--normal-effort', 'high'],
+      ['run', '--priority', 'normal', 'Hello'],
+      ['priority', 'some-task', 'normal'],
+      ['policy', 'quality'], ['policy', 'saver'],
+      ['config', '--policy', 'quality'], ['config', '--policy', 'saver'],
+    ]) {
+      await assert.rejects(run(...args), (error: unknown) => {
+        const stderr = (error as {stderr: string}).stderr;
+        assert.match(stderr, /unknown option|invalid|Invalid/);
+        assert.doesNotMatch(stderr, /Cannot start Codex/);
+        return true;
+      });
+    }
+    assert.equal(await new Store(directory).config(), null);
+    assert.deepEqual(await new Store(directory).state(), {version: 2, tasks: []});
   } finally {await rm(directory, {recursive: true, force: true});}
 });

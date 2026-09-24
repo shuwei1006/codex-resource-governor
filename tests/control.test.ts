@@ -14,23 +14,23 @@ test('explicit manual selection beats High priority and quota; off returns no se
   assert.equal(decide(value, config, {}, models).next, null);
   assert.equal(value.manualSelection, null);
   changeControl(value, 'auto');
-  assert.deepEqual(decide(value, config, {}, models).next, config.normal);
+  assert.deepEqual(decide(value, config, {}, models).next, config.primary);
 });
 
 test('mode edits require explicit manual pairs, preserve Current and cycle holds, and parse legacy records', () => {
   const value = task();
-  value.current = config.normal;
+  value.current = config.primary;
   value.holds = {weekly: {stage: 2, resetsAt: 200}};
   assert.throws(() => changeControl(value, 'manual'), /both/);
-  assert.throws(() => changeControl(value, 'off', config.normal), /only valid/);
+  assert.throws(() => changeControl(value, 'off', config.primary), /only valid/);
   assert.equal(value.mode, 'auto');
   changeControl(value, 'manual', config.economy);
-  assert.deepEqual(value.current, config.normal);
+  assert.deepEqual(value.current, config.primary);
   assert.deepEqual(decide(value, config, {}, models).holds, value.holds);
   changeControl(value, 'auto');
   assert.deepEqual(decide(value, config, {}, models).next, config.economy);
   const legacy = {...task(), mode: 'keep', manualSelection: undefined, controlRevision: undefined, currentMode: undefined};
   const parsed = taskSchema.parse(legacy);
   assert.equal(parsed.mode, 'keep'); assert.equal(parsed.controlRevision, 0);
-  assert.deepEqual(decide(parsed, config, {}, models).next, config.normal);
+  assert.deepEqual(decide(parsed, config, {}, models).next, config.primary);
 });

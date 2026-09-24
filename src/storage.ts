@@ -31,13 +31,13 @@ export async function atomicWrite(path: string, value: unknown): Promise<void> {
 async function readValidated<T>(path: string, schema: z.ZodType<T, z.ZodTypeDef, unknown>, fallback: T): Promise<T> {
   try {return schema.parse(JSON.parse(await readFile(path, 'utf8')));} catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return fallback;
-    throw new Error(`Cannot read ${path}; repair or restore this file. It was not overwritten.`, {cause: error});
+    throw new Error(`Cannot read ${path}; expected schema version 2 (primary profile, medium priority, quality-first/balanced/save-quota policies). Legacy files are not supported. Back up the old storage directory and use a new CODEX_GOVERNOR_HOME, then run codex-governor config. For corrupt files, repair or restore them. It was not overwritten.`, {cause: error});
   }
 }
 export class Store {
   constructor(readonly directory = storageDirectory()) {}
   async config(): Promise<Config | null> {return readValidated(join(this.directory, 'config.json'), configSchema.nullable(), null);}
-  async state(): Promise<State> {return readValidated(join(this.directory, 'state.json'), stateSchema, {version: 1, tasks: []});}
+  async state(): Promise<State> {return readValidated(join(this.directory, 'state.json'), stateSchema, {version: 2, tasks: []});}
   async saveConfig(config: Config): Promise<void> {await this.lock(async () => atomicWrite(join(this.directory, 'config.json'), configSchema.parse(config)));}
   async update(change: (state: State) => void): Promise<State> {
     return this.lock(async () => {const state = await this.state(); change(state); await atomicWrite(join(this.directory, 'state.json'), stateSchema.parse(state)); return state;});

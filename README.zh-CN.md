@@ -4,18 +4,40 @@
 
 codex跑着跑着就用光了。并行跑几个 Codex 任务时，额度往往要留给最重要的事：修复代码可能需要更强的模型，整理文档则未必。大多数额度监视器都能告诉你还剩多少，但具体到哪个任务、下一条消息该用什么模型，通常仍要自己逐一判断和调整。
 
-Codex Resource Governor 把这一步放到任务开始前。你设定 Normal 和 Economy 两套模型及思考强度，给任务标记优先级，再选择不同的策略 Quality、Balanced 或 Saver 。它通过 Codex App Server 读取账号额度和可用模型，在**每一轮用户消息开始前**选择配置（一轮已经开始，就不会中途切换）。与 [Codex Usage Monitor](https://github.com/Corread8/codex-usage-monitor)、[Codex Monitor](https://github.com/manuelsh/codex-monitor) 这类查看额度或回顾用量的工具相比，它关注的是如何给任务按优先级分配额度。
+Codex Resource Governor 把这一步放到任务开始前。你设定主力配置和节省配置两套模型及思考强度，给任务标记优先级，再选择不同的策略质量优先、均衡或节省优先。它通过 Codex App Server 读取账号额度和可用模型，在**每一轮用户消息开始前**选择配置（一轮已经开始，就不会中途切换）。与 [Codex Usage Monitor](https://github.com/Corread8/codex-usage-monitor)、[Codex Monitor](https://github.com/manuelsh/codex-monitor) 这类查看额度或回顾用量的工具相比，它关注的是如何给任务按优先级分配额度。
 
 它最适合多个受管理会话同时运行、额度开始紧张的情况。
-High 优先级保持 Normal；Normal 和 Low 可以随着额度收紧降低思考强度或切到 Economy。
-Economy 由你自己指定，本项目不根据模型名称推断价格，也不承诺固定节省比例。
+高优先级任务保持主力配置；中、低优先级任务可以随着额度收紧降低思考强度或切到节省配置。
+节省配置由你自己指定，本项目不根据模型名称推断价格，也不承诺固定节省比例。
 但如果你经常只用一个会话且没有额度焦虑，那这个项目可能对你没什么用途。
 
-这是独立的 MIT 开源项目。v0.1 提供本地 CLI/TUI，只管理它创建的任务；
+这是独立的 MIT 开源项目。v0.2 提供本地 CLI/TUI，只管理它创建的任务；
 Codex 仍负责登录、会话历史、工具调用和审批。
 注意，由于开放性限制，Codex桌面 App、IDE 或其他 CLI 《自行创建》的会话不会自动纳入管理。
 
 [安装](#安装与首次配置) · [快速上手](#快速上手) · [使用场景](#典型使用场景) · [策略](#策略与额度) · [会话控制](#会话控制模式) · [命令速查](#命令速查) · [常见环境检查](#兼容性与-doctor)
+
+## 四个概念，分别设置
+
+| 概念 | 界面名称 | 决定什么 |
+| --- | --- | --- |
+| 执行配置（Model Profile） | 主力配置 / 节省配置（Primary / Economy） | 两套模型与思考强度组合 |
+| 任务优先级（Task Priority） | 高 / 中 / 低（High / Medium / Low） | 哪些任务优先使用主力配置 |
+| 额度策略（Quota Policy） | 质量优先 / 均衡 / 节省优先 | 额度到什么程度、对哪些任务降低配置 |
+| 思考强度（Reasoning Effort） | 模型支持的原始档位，如 `high`、`medium`、`low` | 单轮调用使用的思考强度 |
+
+例如：任务优先级为“高”，使用“主力配置”；主力配置可以是模型 A + `medium` 思考强度。高优先级并不要求 `high` 思考强度。
+
+**新命令与配置格式（0.2.0）：**主力配置使用 `--primary-model`、`--primary-effort` 和 JSON 的 `primary` 字段；中优先级使用 `--priority medium`。额度策略参数为 `quality-first`、`balanced`、`save-quota`。配置和任务状态文件的 `version` 均为 `2`。旧参数、旧字段和版本 1 的存储文件不再支持，也不会自动转换或覆盖。
+
+从旧版升级前先结束运行中的任务并备份原存储目录，再选择一个新的目录重新配置：
+
+```sh
+export CODEX_GOVERNOR_HOME="$HOME/.config/codex-resource-governor-v2"
+codex-governor config --lang zh-CN
+```
+
+其他终端也需使用相同的 `CODEX_GOVERNOR_HOME`。旧任务记录仍留在原目录，Codex 会话历史不受影响；新目录只管理重新创建的任务。源码安装时，将 `codex-governor` 替换为 `node dist/cli.js`。
 
 ## 安装与首次配置
 
@@ -35,7 +57,7 @@ Windows 建议使用 WSL2。
 
 ### 从 npm 安装
 
-已发布到 [npm](https://www.npmjs.com/package/codex-resource-governor)，可直接全局安装：
+目前 [npm](https://www.npmjs.com/package/codex-resource-governor) 已发布的是 **0.1.0**，仍使用旧命名；本 README 描述的是 **0.2.0 源码版本**。体验新命令请使用下面的源码安装。安装已发布版请参阅 [v0.1.0 文档](https://github.com/shuwei1006/codex-resource-governor/blob/v0.1.0/README.zh-CN.md)：
 
 ```sh
 npm install -g codex-resource-governor
@@ -46,7 +68,7 @@ codex-governor
 
 ### 首次配置
 
-配置向导首先选择 English / 简体中文，再选择 Normal 模型与推理强度、Economy 模型与推理强度、策略。所有可选值来自当前账号的 `model/list`。Economy 由用户自行选择；
+配置向导首先选择 English / 简体中文，再选择主力配置的模型与思考强度、节省配置的模型与思考强度、额度策略。所有可选值来自当前账号的 `model/list`。节省配置由用户自行选择；
 
 语言选择放在安装后的首次配置中，npm 生命周期不弹交互提示，避免自动安装卡住。默认英文，也可设置 `CODEX_GOVERNOR_LANG=zh-CN`；`--lang` 优先。
 
@@ -71,7 +93,7 @@ node dist/cli.js config --lang zh-CN
 <details>
 <summary>脚本中的非交互配置</summary>
 
-非交互配置可传 `--normal-model`、`--normal-effort`、`--economy-model`、`--economy-effort`、`--policy`、`--lang`。首次使用必须提供完整模型配置，之后仅提供需修改的字段。模型和 effort 必须真实存在于账号返回结果中。
+非交互配置可传 `--primary-model`、`--primary-effort`、`--economy-model`、`--economy-effort`、`--policy`、`--lang`。首次使用必须提供完整模型配置，之后仅提供需修改的字段。模型和 effort 必须真实存在于账号返回结果中。
 
 </details>
 
@@ -83,7 +105,7 @@ node dist/cli.js config --lang zh-CN
 codex-governor run --priority high "写一份关于codex的PPT"
 ```
 
-系统会在本地生成任务名 `codexPPT`，创建 Codex Thread，根据当前额度、优先级与策略选择模型/推理强度，再通过 `turn/start` 发送完整任务描述。交互终端会自动打开详情并开始执行，不需要再次按 Enter。重定向输出时则等待执行完成并打印回复，交互审批会明确拒绝。
+系统会在本地生成任务名 `codexPPT`，创建 Codex Thread，根据当前额度、优先级与策略选择模型/思考强度，再通过 `turn/start` 发送完整任务描述。交互终端会自动打开详情并开始执行，不需要再次按 Enter。重定向输出时则等待执行完成并打印回复，交互审批会明确拒绝。
 
 <details>
 <summary>自定义任务名称与其他 run 写法</summary>
@@ -120,39 +142,39 @@ codex-governor delete <任务ID>
 
 ### 多个会话并行时保护重要任务
 
-让发布修复始终使用 Normal 配置，同时允许常规任务在额度紧张时降低推理强度或切换 Economy：
+让发布修复始终使用主力配置，同时允许常规任务在额度紧张时降低思考强度或切换节省配置：
 
 ```sh
 codex-governor run --priority high "修复阻塞发布的登录回归问题"
-codex-governor run --priority normal "为设置页面补充测试"
+codex-governor run --priority medium "为设置页面补充测试"
 codex-governor run --priority low "整理并总结归档的设计文档"
 ```
 
-Auto 模式下，High 优先级始终使用配置好的 Normal 模型与思考强度；Normal 和 Low 根据当前额度与策略调整。这是最典型的场景：同时运行多个会话、任务重要程度不同、可用额度有限。
+Auto 模式下，高优先级任务始终使用主力配置中的模型与思考强度；中、低优先级任务根据当前额度与策略调整。这是最典型的场景：同时运行多个会话、任务重要程度不同、可用额度有限。
 
-### 首轮使用 Normal，后续修改按额度调整
+### 首轮使用主力配置，后续修改按额度调整
 
 PPT、报告、网站或大型重构通常需要高质量的第一版，而后续小修改可以根据额度调整：
 
 ```sh
 codex-governor run --priority high "制作产品发布会 PPT 的第一份完整版本"
 # 第一轮完成后：
-codex-governor priority <任务ID> normal
+codex-governor priority <任务ID> medium
 ```
 
-第一轮从开始到结束都保持 Normal 配置。之后每次输入“修改第三页”或“检查导出文件”等新要求前，Governor 都会刷新额度，再选择 Normal、降低一级思考强度或 Economy。制作过程中不会执行到一半突然切换模型。
+第一轮从开始到结束都保持主力配置。之后每次输入“修改第三页”或“检查导出文件”等新要求前，Governor 都会刷新额度，再选择主力配置、降低一级思考强度或节省配置。制作过程中不会执行到一半突然切换模型。
 
 ### 用更保守的策略执行常规任务
 
-对于更关注吞吐量、无需始终保持最高推理质量的任务，可以使用 Low 优先级和 Saver 策略：
+对于更关注吞吐量、无需始终保持最高推理质量的任务，可以使用低优先级和节省优先策略：
 
 ```sh
-codex-governor policy saver
+codex-governor policy save-quota
 codex-governor run --priority low "统一整理项目文档格式"
 codex-governor run --priority low "汇总已经完成的测试日志"
 ```
 
-Saver 会比 Balanced 和 Quality 更早收紧配置。实际使用哪个 Economy 模型由首次配置决定；Governor 不推断模型价格或成本。
+节省优先会比均衡和质量优先更早收紧配置。实际使用哪个节省配置的模型由首次配置决定；Governor 不推断模型价格或成本。
 
 ## 策略与额度
 
@@ -164,15 +186,15 @@ codex-governor policy balanced
 codex-governor explain <任务ID>
 ```
 
-Normal 和 Economy 是你配置的两套模型与思考强度；`high`、`normal`、`low` 则是任务优先级。Auto 模式下，High 使用 Normal 配置，Normal 和 Low 按下表调整。Manual 和 Off 的规则见[会话控制模式](#会话控制模式)。
+主力配置和节省配置是你配置的两套模型与思考强度；`high`、`medium`、`low` 则是任务优先级。Auto 模式下，高优先级任务使用主力配置，中、低优先级任务按下表调整。Manual 和 Off 的规则见[会话控制模式](#会话控制模式)。
 
 阈值是**本项目默认值，并非 OpenAI 官方规则**，全部使用严格“小于”。
 
-| 策略 | Normal/Low 降一级推理强度 | 切 Economy |
+| 额度策略 | 中/低优先级任务降一级思考强度 | 切节省配置 |
 | --- | --- | --- |
-| quality | 剩余 <10% | 剩余 <5%，仅 Low |
-| balanced（默认） | 剩余 <20% | 剩余 <10%，Normal/Low |
-| saver | 剩余 <40% | 剩余 <20%，Normal/Low |
+| 质量优先（`quality-first`） | 剩余 <10% | 剩余 <5%，仅低优先级任务 |
+| 均衡（`balanced`，默认） | 剩余 <20% | 剩余 <10%，中/低优先级任务 |
+| 节省优先（`save-quota`） | 剩余 <40% | 剩余 <20%，中/低优先级任务 |
 
 额度同时存在 5 小时和每周窗口时，取剩余比例较低的一个。同一额度周期内，自动选择只会保持或降低配置；周期重置后才解除对应限制。额度暂时无法读取时保留已有约束，不把未知额度当成 0。
 
@@ -181,11 +203,11 @@ Normal 和 Economy 是你配置的两套模型与思考强度；`high`、`normal
 <details>
 <summary>额度窗口、降档与重置的详细规则</summary>
 
-Auto 中的 High 优先级与旧 Keep 模式使用 Normal 配置；Manual/Off 不受该规则覆盖。有效额度取可用的 5h/周窗口剩余百分比最小值。窗口按时长 300 / 10080 分钟识别，不假定 primary 一定是 5h。优先选择全局 `codex` bucket；不会把某模型的额度当作全局额度。未知时长、过期快照、异常百分比和缺失数据都视为不可用，不当作 0。
+Auto 中的高优先级任务与旧 Keep 模式使用主力配置；Manual/Off 不受该规则覆盖。有效额度取可用的 5h/周窗口剩余百分比最小值。窗口按时长 300 / 10080 分钟识别，不假定 primary 一定是 5h。优先选择全局 `codex` bucket；不会把某模型的额度当作全局额度。未知时长、过期快照、异常百分比和缺失数据都视为不可用，不当作 0。
 
-同一周期内自动控制只会 `Normal → Lower Reasoning → Economy`。每个任务分别记录两个窗口的降档约束：旧重置时间已经过去，且新的有效快照提供了更晚的重置时间，才解除该窗口的约束。5h 重置不会解除周窗口触发的限制。缺失额度/重置时间时保持已有约束，不新增自动降档。
+同一周期内自动控制只会 `主力配置 → 降低思考强度 → 节省配置`。每个任务分别记录两个窗口的降档约束：旧重置时间已经过去，且新的有效快照提供了更晚的重置时间，才解除该窗口的约束。5h 重置不会解除周窗口触发的限制。缺失额度/重置时间时保持已有约束，不新增自动降档。
 
-High/Keep 暂时绕过周期约束，切回 Auto 后可能重新应用。更改策略或配置不清除周期记录，但用户主动配置新模型/effort 会影响下一轮的实际选择。推理强度仅从真实可用档位降低一级，不会每次刷新再降一级。遇到未来未知档位或没有更低档位时保持原值，不猜测顺序。
+高优先级/Keep 暂时绕过周期约束，切回 Auto 后可能重新应用。更改策略或配置不清除周期记录，但用户主动配置新模型/effort 会影响下一轮的实际选择。思考强度仅从真实可用档位降低一级，不会每次刷新再降一级。遇到未来未知档位或没有更低档位时保持原值，不猜测顺序。
 
 同一任务通过原子状态预留防止重复提交。
 
@@ -197,16 +219,16 @@ High/Keep 暂时绕过周期约束，切回 Auto 后可能重新应用。更改�
 | --- | --- |
 | `codex-governor` | 打开 TUI；首次启动进入配置 |
 | `codex-governor doctor` | 检查运行环境、登录、schema 和接口能力 |
-| `codex-governor config` | 配置 Normal / Economy / Policy / 语言 |
+| `codex-governor config` | 配置主力与节省配置 / 额度策略 / 语言 |
 | `codex-governor run --priority high "写一份关于codex的PPT"` | 自动命名、创建任务并立即执行 |
 | `codex-governor list [--json]` | 查看任务 ID 与 Codex Thread ID |
 | `codex-governor open <id> --target app\|vscode\|both` | 在原生客户端打开已完成的任务 |
 | `codex-governor integration vscode --codex /path/to/codex` | 为 VS Code 生成接入 Governor 所需的文件和设置说明，你在 VS Code 中继续 Governor 创建的任务时，Governor 才能为后续消息选模型。（这个接入方式可能随 Codex 扩展升级而变化。） |
-| `codex-governor priority <id> high\|normal\|low` | 调整优先级 |
+| `codex-governor priority <id> high\|medium\|low` | 调整优先级 |
 | `codex-governor mode <id> auto\|manual\|off` | 自动选模／手动固定／原生控制；兼容 keep |（见下文会话控制部分）
 | `codex-governor interrupt <id>` | 按任务 ID 中断运行中的 turn，支持从另一个终端操作 |
 | `codex-governor delete <id>` | 删除本地任务记录；运行中会先中断 |
-| `codex-governor policy quality\|balanced\|saver` | 切换策略 |
+| `codex-governor policy quality-first\|balanced\|save-quota` | 切换策略 |
 | `codex-governor explain <id>` | 解释下一轮为何调整 |
 
 更多参数可用 `codex-governor <命令> --help` 查看。
@@ -229,15 +251,15 @@ Manual 必须同时指定模型和思考强度，并通过当前账号的模型�
 
 在已接入 Governor 的 VS Code 中，若要使用原生模型选择器，先切换到 `off`。桌面 App 和直接运行的 `codex resume` 不经过 Governor，始终使用各自的设置。Off 下显示的“当前”配置可能只是上次执行的记录。
 
-旧 `keep` 模式仍兼容，表示使用最新的 Normal 配置。详细规则见[控制权与冲突说明](docs/session-control.md)。
+旧 `keep` 模式仍兼容，表示使用最新的主力配置。详细规则见[控制权与冲突说明](docs/session-control.md)。
 
 ## TUI 使用
 
 主界面显示当前策略、5h/周额度和任务列表，按终端高度分页。每个任务分别展示：
 
 ```text
-当前:   <Normal 模型> · high
-下一轮: <Economy 模型> · medium
+当前:   <主力配置的模型> · 思考强度: high
+下一轮: <节省配置的模型> · 思考强度: medium
 ```
 
 “当前”是提交给当前或上一轮的模型/effort，不是服务端实时回执证明。“下一轮”是最新策略结果。运行中的 turn 不会因自动降档而中途换模型。

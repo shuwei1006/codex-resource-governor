@@ -1,6 +1,6 @@
 {
   "name": "codex-resource-governor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local quota-aware task management and per-turn model selection for Codex",
   "type": "module",
   "license": "MIT",

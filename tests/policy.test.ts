@@ -4,11 +4,11 @@ import {decide, effectiveRemaining, explain, lowerReasoning, parseQuota} from '.
 import {validateConfig, type Policy, type Priority} from '../src/domain.js';
 import {config, models, task} from './helpers.js';
 
-for (const policy of ['quality', 'balanced', 'saver'] as Policy[]) {
-  const reduce = {quality: 10, balanced: 20, saver: 40}[policy];
-  const economy = {quality: 5, balanced: 10, saver: 20}[policy];
-  for (const priority of ['high', 'normal', 'low'] as Priority[]) {
-    for (const [remaining, expected] of [[100, 0], [reduce, 0], [reduce - 1, 1], [economy, 1], [economy - 1, policy === 'quality' && priority === 'normal' ? 1 : 2], [0, policy === 'quality' && priority === 'normal' ? 1 : 2]]) {
+for (const policy of ['quality-first', 'balanced', 'save-quota'] as Policy[]) {
+  const reduce = {'quality-first': 10, balanced: 20, 'save-quota': 40}[policy];
+  const economy = {'quality-first': 5, balanced: 10, 'save-quota': 20}[policy];
+  for (const priority of ['high', 'medium', 'low'] as Priority[]) {
+    for (const [remaining, expected] of [[100, 0], [reduce, 0], [reduce - 1, 1], [economy, 1], [economy - 1, policy === 'quality-first' && priority === 'medium' ? 1 : 2], [0, policy === 'quality-first' && priority === 'medium' ? 1 : 2]]) {
       test(`${policy}/${priority} at ${remaining}%`, () => {
         const result = decide({...task(), priority}, {...config, policy}, {weekly: {remaining: remaining!, resetsAt: 200}}, models, 100);
         assert.equal(result.stage, priority === 'high' ? 0 : expected);
@@ -16,10 +16,10 @@ for (const policy of ['quality', 'balanced', 'saver'] as Policy[]) {
     }
   }
 }
-test('Keep and High always use Normal, even after an Economy hold', () => {
+test('Keep and High always use Primary, even after an Economy hold', () => {
   for (const override of [{mode: 'keep' as const}, {priority: 'high' as const}]) {
     const result = decide({...task(), ...override, holds: {weekly: {stage: 2, resetsAt: 200}}}, config, {weekly: {remaining: 0, resetsAt: 200}}, models, 100);
-    assert.equal(result.stage, 0); assert.deepEqual(result.next, config.normal);
+    assert.equal(result.stage, 0); assert.deepEqual(result.next, config.primary);
   }
 });
 test('reasoning lowers one supported level and never compounds', () => {
@@ -58,8 +58,8 @@ test('invalid percentages, unsupported durations and expired observations are un
   assert.equal(effectiveRemaining({}), null);
 });
 test('model and effort validation uses live catalog; unknown effort never guessed', () => {
-  assert.throws(() => validateConfig({...config, normal: {model: 'made-up', effort: 'high'}}, models));
-  assert.throws(() => validateConfig({...config, normal: {model: 'model-b', effort: 'high'}}, models));
+  assert.throws(() => validateConfig({...config, primary: {model: 'made-up', effort: 'high'}}, models));
+  assert.throws(() => validateConfig({...config, primary: {model: 'model-b', effort: 'high'}}, models));
   assert.deepEqual(lowerReasoning({model: 'model-a', effort: 'future-level'}, models), {model: 'model-a', effort: 'future-level'});
   assert.equal(lowerReasoning({model: 'model-a', effort: 'low'}, models).effort, 'low');
 });

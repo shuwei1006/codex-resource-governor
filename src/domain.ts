@@ -1,15 +1,15 @@
 import {z} from 'zod';
 
-export const prioritySchema = z.enum(['high', 'normal', 'low']);
+export const prioritySchema = z.enum(['high', 'medium', 'low']);
 export const modeSchema = z.enum(['auto', 'manual', 'off', 'keep']);
-export const policySchema = z.enum(['quality', 'balanced', 'saver']);
+export const policySchema = z.enum(['quality-first', 'balanced', 'save-quota']);
 export const languageSchema = z.enum(['en', 'zh-CN']);
 export const selectionSchema = z.object({model: z.string().min(1), effort: z.string().min(1)});
 export const configSchema = z.object({
-  version: z.literal(1), language: languageSchema.default('en'),
-  normal: selectionSchema, economy: selectionSchema, policy: policySchema.default('balanced'),
+  version: z.literal(2), language: languageSchema.default('en'),
+  primary: selectionSchema, economy: selectionSchema, policy: policySchema.default('balanced'),
   openIn: z.enum(['none', 'app', 'vscode', 'both']).optional(),
-});
+}).strict();
 export const modelSchema = z.object({
   id: z.string(), model: z.string().min(1), displayName: z.string(),
   hidden: z.boolean().default(false), isDefault: z.boolean().default(false),
@@ -39,7 +39,7 @@ export const taskSchema = z.object({
   status: z.enum(['idle', 'starting', 'running', 'completed', 'failed', 'interrupted', 'unknown']).default('idle'),
   ownerPid: z.number().nullable().default(null), output: z.string().default(''), error: z.string().nullable().default(null),
 });
-export const stateSchema = z.object({version: z.literal(1), tasks: z.array(taskSchema)});
+export const stateSchema = z.object({version: z.literal(2), tasks: z.array(taskSchema)});
 export type Config = z.infer<typeof configSchema>;
 export type Model = z.infer<typeof modelSchema>;
 export type Selection = z.infer<typeof selectionSchema>;
@@ -59,7 +59,7 @@ export function validateSelection(selection: Selection, models: Model[]): void {
   }
 }
 export function validateConfig(config: Config, models: Model[]): void {
-  validateSelection(config.normal, models);
+  validateSelection(config.primary, models);
   validateSelection(config.economy, models);
 }
 export function errorMessage(error: unknown): string {return error instanceof Error ? error.message : String(error);}

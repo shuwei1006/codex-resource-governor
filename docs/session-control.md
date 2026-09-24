@@ -9,7 +9,7 @@
 | auto | Governor 的额度、优先级和策略 | 直到显式切换 |
 | manual | 明确指定的模型＋思考强度，优先于额度和 High 优先级 | 直到显式切换或重新设置 |
 | off | 原生客户端，IDE 代理原样透传请求 | 直到显式切换 |
-| keep（旧模式兼容） | 最新的 Normal 配置 | 直到显式切换 |
+| keep（旧模式兼容） | 最新的 主力配置 | 直到显式切换 |
 
 ```sh
 codex-governor mode <任务ID> manual --model <模型ID> --effort <思考强度>
@@ -22,7 +22,7 @@ codex-governor explain <任务ID>
 
 Manual 必须同时指定模型与思考强度，用账号当前模型目录校验。不支持的组合报错并保留原模式；已固定的模型后续不可用时，发送失败，不静默回退。只有用户明确操作才进入 manual，不根据原生请求的模型字段差异猜测用户意图。
 
-切回 auto 清除手动组合并恢复策略；此前额度周期限制仍保留，按真实周期重置规则释放。Manual/off 不新增或清除这些历史限制。Keep 仍跟随 Normal 配置，修改 Normal 会影响其下一轮；它不代表固定上一次执行值，也不代表保留原生选择器。
+切回 auto 清除手动组合并恢复策略；此前额度周期限制仍保留，按真实周期重置规则释放。Manual/off 不新增或清除这些历史限制。Keep 仍跟随 主力配置，修改主力配置 会影响其下一轮；它不代表固定上一次执行值，也不代表保留原生选择器。
 
 ## 接入边界
 
@@ -52,6 +52,6 @@ Off 保留任务记录，不等同于 delete。历史 Current 和任务状态可
 
 ## English summary
 
-Auto uses Governor policy. Manual requires an explicit validated model/effort pair and remains fixed until changed, regardless of quota or priority. Off passes IDE requests through unchanged and disables new Governor prompt dispatch. Legacy Keep follows the latest Normal configuration. Native App/plain CLI traffic remains outside the proxy in every mode.
+Auto uses Governor policy. Manual requires an explicit validated model/effort pair and remains fixed until changed, regardless of quota or priority. Off passes IDE requests through unchanged and disables new Governor prompt dispatch. Legacy Keep follows the latest Primary configuration. Native App/plain CLI traffic remains outside the proxy in every mode.
 
 Changes apply at the next atomic turn reservation. Current retains the last acknowledged selection and its control mode; off-mode history may be stale. Revision checks reject stale proxy preflight without replaying input. Returning to auto clears the manual pair while preserving cycle holds. The native selector does not automatically change control mode; explicitly choose off to honor it.

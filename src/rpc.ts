@@ -49,7 +49,7 @@ export class AppServer extends EventEmitter implements Rpc {
   private stderrTail = '';
   private pending = new Map<number, {resolve: (result: unknown) => void; reject: (error: Error) => void; timer: NodeJS.Timeout}>();
   constructor(readonly binary = resolveCodexBinary(), readonly timeoutMs = 20_000, private readonly launchArgs?: string[]) {super();}
-  async start(initializeParams: unknown = {clientInfo: {name: 'codex_resource_governor', title: 'Codex Resource Governor', version: '0.1.0'}}): Promise<unknown> {
+  async start(initializeParams: unknown = {clientInfo: {name: 'codex_resource_governor', title: 'Codex Resource Governor', version: '0.2.0'}}): Promise<unknown> {
     if (this.process) throw new Error('App Server already started.');
     const child = spawn(this.binary, this.launchArgs ?? ['app-server', '-c', 'analytics.enabled=false', '-c', 'otel.exporter="none"', '-c', 'otel.trace_exporter="none"'], {stdio: ['pipe', 'pipe', 'pipe'], shell: false});
     this.process = child;

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {policyLabel, priorityLabel} from './labels.js';
 import React from 'react';
 import {Command, Option} from 'commander';
 import {render} from 'ink';
@@ -68,21 +69,21 @@ async function headlessTurn(governor: Governor, id: string, prompt: string): Pro
     });
   } finally {governor.off('change', rejectRequests);}
 }
-const program = new Command().name('codex-governor').description('Quota-aware model and reasoning governance for Codex tasks').version('0.1.0');
+const program = new Command().name('codex-governor').description('Quota-aware model and reasoning governance for Codex tasks').version('0.2.0');
 program.action(async () => {requireTTY(); await withGovernor(governor => tui(governor));});
 program.command('doctor').description('Check Codex environment and runtime capabilities').option('--live-turn', 'Also run one real read-only turn (uses account quota)').action(async options => {
   const results = await doctor(undefined, Boolean(options.liveTurn), check => process.stdout.write(`${check.ok ? 'PASS' : 'FAIL'} ${check.name}: ${check.detail}\n`));
   if (results.some(r => !r.ok)) process.exitCode = 1;
 });
-program.command('config').description('Configure Normal / Economy / Policy / Language')
-  .addOption(languageOption()).option('--normal-model <model>').option('--normal-effort <effort>')
-  .option('--economy-model <model>').option('--economy-effort <effort>')
-  .addOption(new Option('--policy <policy>').choices(['quality', 'balanced', 'saver']))
+program.command('config').description('Configure Primary / Economy model profiles, Quota Policy, and language')
+  .addOption(languageOption()).option('--primary-model <model>', 'Primary profile model').option('--primary-effort <effort>', 'Primary profile Reasoning Effort')
+  .option('--economy-model <model>', 'Economy profile model').option('--economy-effort <effort>', 'Economy profile Reasoning Effort')
+  .addOption(new Option('--policy <policy>', 'Quota Policy: quality-first = Quality First, balanced = Balanced, save-quota = Save Quota').choices(['quality-first', 'balanced', 'save-quota']))
   .addOption(new Option('--open-in <target>', 'Automatically open completed run tasks in a native Codex client').choices(['none', 'app', 'vscode', 'both']))
   .option('--show', 'Print the saved configuration without connecting to Codex')
   .option('--path', 'Print the configuration file path without connecting to Codex')
   .action(async options => {
-    const changes = [options.lang, options.normalModel, options.normalEffort, options.economyModel, options.economyEffort, options.policy, options.openIn].some(Boolean);
+    const changes = [options.lang, options.primaryModel, options.primaryEffort, options.economyModel, options.economyEffort, options.policy, options.openIn].some(Boolean);
     if ((options.show || options.path) && changes) throw new Error('Use --show or --path separately from configuration changes.');
     if (options.show && options.path) throw new Error('Choose either --show or --path.');
     if (options.path) {process.stdout.write(`${configPath}\n`); return;}
@@ -95,18 +96,18 @@ program.command('config').description('Configure Normal / Economy / Policy / Lan
     await withServer(async rpc => {
       await requireChatGPT(rpc); const models = await listModels(rpc);
       const previous = await store.config();
-      if (!options.normalModel && !options.normalEffort && !options.economyModel && !options.economyEffort && !options.policy && !options.openIn && !(options.lang && previous)) {await wizard(models, options.lang); return;}
-      const config = configSchema.parse({version: 1, language: options.lang ?? previous?.language ?? languageSchema.catch('en').parse(process.env.CODEX_GOVERNOR_LANG), normal: {model: options.normalModel ?? previous?.normal.model, effort: options.normalEffort ?? previous?.normal.effort}, economy: {model: options.economyModel ?? previous?.economy.model, effort: options.economyEffort ?? previous?.economy.effort}, policy: options.policy ?? previous?.policy ?? 'balanced', openIn: options.openIn ?? previous?.openIn});
+      if (!options.primaryModel && !options.primaryEffort && !options.economyModel && !options.economyEffort && !options.policy && !options.openIn && !(options.lang && previous)) {await wizard(models, options.lang); return;}
+      const config = configSchema.parse({version: 2, language: options.lang ?? previous?.language ?? languageSchema.catch('en').parse(process.env.CODEX_GOVERNOR_LANG), primary: {model: options.primaryModel ?? previous?.primary.model, effort: options.primaryEffort ?? previous?.primary.effort}, economy: {model: options.economyModel ?? previous?.economy.model, effort: options.economyEffort ?? previous?.economy.effort}, policy: options.policy ?? previous?.policy ?? 'balanced', openIn: options.openIn ?? previous?.openIn});
       validateConfig(config, models); await store.saveConfig(config);
       if (!await store.config()) throw new Error(`Configuration was not found after saving: ${configPath}`);
       process.stdout.write(config.language === 'zh-CN' ? `配置已保存：${configPath}\n` : `Configuration saved: ${configPath}\n`);
     });
   });
 program.command('run [prompt]').allowExcessArguments(false).description('Describe a task to automatically name, create, and execute it')
-  .option('--name <name>', 'Override the automatically generated task name').addOption(new Option('--priority <priority>').choices(['high', 'normal', 'low']).default('normal'))
+  .option('--name <name>', 'Override the automatically generated task name').addOption(new Option('--priority <priority>', 'Task Priority: high = High, medium = Medium, low = Low').choices(['high', 'medium', 'low']).default('medium'))
   .option('--cwd <directory>', 'Task working directory', process.cwd()).option('--prompt <text>', 'Alternative to the positional prompt (legacy syntax)')
   .addOption(new Option('--open <target>', 'Open the native client after successful completion').choices(['none', 'app', 'vscode', 'both']))
-  .addHelpText('after', '\nExample:\n  codex-governor run --priority high "做一个关于中秋节的祝福卡片"')
+  .addHelpText('after', '\nExample:\n  codex-governor run --priority high "写一份关于codex的PPT"')
   .action(async (positionalPrompt: string | undefined, options) => {
     if (positionalPrompt !== undefined && options.prompt !== undefined) throw new Error('Provide either a positional prompt or --prompt, not both.');
     const prompt: string | undefined = positionalPrompt ?? options.prompt;
@@ -161,11 +162,11 @@ program.command('integration <target>').description('Generate a native IDE proxy
     process.stdout.write(`${JSON.stringify({'chatgpt.cliExecutable': launcher}, null, 2)}\n`);
     process.stderr.write('Experimental IDE integration: merge this setting into VS Code User settings, then Reload Window. Remove chatgpt.cliExecutable to undo. Desktop App input is not intercepted.\n');
   });
-program.command('priority <id> <priority>').description('Set high | normal | low priority').action(async (id: string, value: string) => {
+program.command('priority <id> <priority>').description('Set Task Priority: high = High, medium = Medium, low = Low').action(async (id: string, value: string) => {
   const priority = prioritySchema.parse(value);
-  await withGovernor(async governor => {await governor.setPriority(id, priority); process.stdout.write(`${governor.task(id).id}: ${priority}\n`);});
+  await withGovernor(async governor => {await governor.setPriority(id, priority); process.stdout.write(`${governor.task(id).id}: ${governor.config.language === 'zh-CN' ? '任务优先级' : 'Task Priority'}: ${priorityLabel(priority, governor.config.language)}\n`);});
 });
-program.command('mode <id> <mode>').description('Set auto | manual | off (keep is legacy Normal mode)')
+program.command('mode <id> <mode>').description('Set auto | manual | off (keep uses the Primary profile)')
   .option('--model <model>', 'Required explicit model for manual mode')
   .option('--effort <effort>', 'Required explicit reasoning effort for manual mode')
   .action(async (id: string, value: string, options) => {
@@ -193,9 +194,9 @@ program.command('delete <id>').description('Delete a local task record; an activ
     process.stdout.write(`Deleted ${task.id}: ${safeText(task.name)}\n`);
   });
 });
-program.command('policy <policy>').description('Set quality | balanced | saver policy').action(async (value: string) => {
+program.command('policy <policy>').description('Set Quota Policy: quality-first = Quality First, balanced = Balanced, save-quota = Save Quota').action(async (value: string) => {
   const policy = policySchema.parse(value);
-  await withGovernor(async governor => {await governor.setConfig({...governor.config, policy} as Config); process.stdout.write(`Policy: ${policy}\n`);});
+  await withGovernor(async governor => {await governor.setConfig({...governor.config, policy} as Config); process.stdout.write(`${governor.config.language === 'zh-CN' ? '额度策略' : 'Quota Policy'}: ${policyLabel(policy, governor.config.language)}\n`);});
 });
 program.command('explain <id>').description('Explain the next-turn decision').action(async (id: string) => {
   await withGovernor(async governor => {process.stdout.write(`${governor.explain(id)}\n`);});

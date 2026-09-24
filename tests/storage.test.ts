@@ -38,3 +38,27 @@ test('concurrent stale-lock recovery does not remove a replacement lock', async 
     assert.equal((await new Store(directory).state()).tasks.length, 8);
   } finally {await rm(directory, {recursive: true, force: true});}
 });
+
+test('version 1 files and mixed legacy fields are rejected without overwriting data', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'crg-legacy-schema-'));
+  try {
+    const store = new Store(directory);
+    const {primary, ...rest} = config;
+    const legacyConfig = JSON.stringify({...rest, version: 1, normal: primary});
+    const legacyState = JSON.stringify({version: 1, tasks: [{...task(), priority: 'normal'}]});
+    await writeFile(join(directory, 'config.json'), legacyConfig);
+    await writeFile(join(directory, 'state.json'), legacyState);
+    await assert.rejects(store.config(), /schema version 2.*Legacy files are not supported/);
+    await assert.rejects(store.update(state => {state.tasks = [];}), /not overwritten/);
+    assert.equal(await readFile(join(directory, 'config.json'), 'utf8'), legacyConfig);
+    assert.equal(await readFile(join(directory, 'state.json'), 'utf8'), legacyState);
+    await assert.rejects(store.saveConfig({...config, normal: primary} as typeof config));
+    assert.equal(await readFile(join(directory, 'config.json'), 'utf8'), legacyConfig);
+    for (const policy of ['quality', 'saver']) {
+      await writeFile(join(directory, 'config.json'), JSON.stringify({...config, policy}));
+      await assert.rejects(store.config(), /not overwritten/);
+    }
+    await writeFile(join(directory, 'state.json'), JSON.stringify({version: 2, tasks: [{...task(), priority: 'normal'}]}));
+    await assert.rejects(store.state(), /not overwritten/);
+  } finally {await rm(directory, {recursive: true, force: true});}
+});

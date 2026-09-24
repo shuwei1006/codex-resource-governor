@@ -33,3 +33,7 @@ The child process forces analytics and OpenTelemetry exporters off. Authenticati
 The optional IDE proxy instead preserves the native client's launch flags, initialization capabilities, sandbox policy, and approval handling. Only registered thread `turn/start` requests receive Governor policy overrides. App deep links provide a completed-turn handoff without intercepting desktop input. See [native integration](native-integration.md) for limits and configuration.
 
 Codex can discard an unused thread without a persisted rollout. After reconnecting, Governor may recreate that empty thread while preserving its logical task ID. This is allowed only when no turn has ever been submitted and no current selection or turn ID exists. The `hasSubmitted` flag is persisted before the RPC write; uncertain submissions fail conservatively rather than replaying input into a new thread.
+
+## Storage format 2
+
+Configuration uses `version: 2`, `primary` and `economy` profiles, and a `quality-first`, `balanced`, or `save-quota` quota policy. Task state also uses `version: 2` and `high`, `medium`, or `low` task priority. Old flags and version 1 files are rejected; there is no runtime alias or automatic migration. Back up old storage and configure a new `CODEX_GOVERNOR_HOME` before using 0.2.0.

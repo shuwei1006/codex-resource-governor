@@ -42,16 +42,16 @@ test('running Current remains immutable while Next follows quota, High and Keep 
   try {
     const task = await governor.createTask('Research');
     await governor.startTurn(task.id, 'First prompt');
-    assert.deepEqual(governor.task(task.id).current, config.normal);
+    assert.deepEqual(governor.task(task.id).current, config.primary);
     rpc.remaining = 5; await governor.refresh();
-    assert.deepEqual(governor.task(task.id).current, config.normal);
+    assert.deepEqual(governor.task(task.id).current, config.primary);
     assert.deepEqual(governor.decision(governor.task(task.id)).next, config.economy);
     assert.equal(rpc.calls.filter(c => c.method === 'turn/start').length, 1);
     await assert.rejects(governor.startTurn(task.id, 'Cannot race'), /active turn/);
     await governor.setPriority(task.id, 'high');
-    assert.deepEqual(governor.decision(governor.task(task.id)).next, config.normal);
+    assert.deepEqual(governor.decision(governor.task(task.id)).next, config.primary);
     await governor.setPriority(task.id, 'low'); await governor.setMode(task.id, 'keep');
-    assert.deepEqual(governor.decision(governor.task(task.id)).next, config.normal);
+    assert.deepEqual(governor.decision(governor.task(task.id)).next, config.primary);
   } finally {await cleanup();}
 });
 test('manual fixes future turns, invalid selection preserves mode, and off blocks Governor dispatch', async () => {
@@ -60,7 +60,7 @@ test('manual fixes future turns, invalid selection preserves mode, and off block
     const task = await governor.createTask('Control');
     await governor.startTurn(task.id, 'First');
     await governor.setMode(task.id, 'manual', config.economy);
-    assert.deepEqual(governor.task(task.id).current, config.normal);
+    assert.deepEqual(governor.task(task.id).current, config.primary);
     assert.equal(governor.task(task.id).currentMode, 'auto');
     await assert.rejects(governor.setMode(task.id, 'manual', {model: 'missing', effort: 'high'}), /unavailable/);
     assert.deepEqual(governor.task(task.id).manualSelection, config.economy);

@@ -54,7 +54,7 @@ test('IDE turns apply current quota/priority while retaining native input, appro
     await store.update(state => {state.tasks[0]!.priority = 'high';});
     await proxy.request('turn/start', original);
     const last = rpc.calls.filter(call => call.method === 'turn/start').at(-1)!.params as typeof original;
-    assert.equal(last.model, config.normal.model); assert.equal(last.effort, config.normal.effort);
+    assert.equal(last.model, config.primary.model); assert.equal(last.effort, config.primary.effort);
   } finally {await proxy.close(); await rm(directory, {recursive: true, force: true});}
 });
 
@@ -135,7 +135,7 @@ test('real proxy process preserves handshake, notifications, server requests, er
     await rpc.request('turn/start', {threadId: task().threadId, input: [{type: 'text', text: 'Keep the entire prompt'}], model: 'native-model', effort: 'high'});
     assert.ok(completed);
     const forwarded = await rpc.request('test/turn-params') as {model: string; effort: string};
-    assert.equal(forwarded.model, config.normal.model); assert.equal(forwarded.effort, 'medium');
+    assert.equal(forwarded.model, config.primary.model); assert.equal(forwarded.effort, 'medium');
     for (let attempt = 0; attempt < 100 && (await store.state()).tasks[0]?.status !== 'completed'; attempt++) await new Promise(resolve => setTimeout(resolve, 20));
     assert.equal((await store.state()).tasks[0]?.status, 'completed');
     assert.equal((await store.state()).tasks[0]?.output, 'Fixture reply: OK');
